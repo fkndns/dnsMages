@@ -518,48 +518,53 @@ local WRange = 830 + myHero.boundingRadius
 local ERange = 556 + myHero.boundingRadius
 local RRange = 682 + myHero.boundingRadius
 local PassiveBuff = "BrandAblaze"
+local BrandIcon = "https://www.proguides.com/public/media/rlocal/champion/thumbnail/63.png"
+local BrandQIcon = "https://www.proguides.com/public/media/rlocal/champion/ability/thumbnail/BrandQ.png"
+local BrandWIcon = "https://www.proguides.com/public/media/rlocal/champion/ability/thumbnail/BrandW.png"
+local BrandEIcon = "https://www.proguides.com/public/media/rlocal/champion/ability/thumbnail/BrandE.png"
+local BrandRIcon = "https://www.proguides.com/public/media/rlocal/champion/ability/thumbnail/BrandR.png"
 
 function Brand:Menu()
-    self.Menu = MenuElement({type = MENU, id = "brand", name = "dnsBrand"})
+    self.Menu = MenuElement({type = MENU, id = "brand", name = "dnsBrand", leftIcon = BrandIcon})
 
     -- Combo
     self.Menu:MenuElement({id = "Combo", name = "Combo", type = MENU})
-    self.Menu.Combo:MenuElement({id = "qcombo", name = "Use [Q] in Combo", value = true})
-    self.Menu.Combo:MenuElement({id = "qcombohc", name = "[Q] HitChance >=", value = 0.7, min = 0.1, max = 1.0, step = 0.1})
-    self.Menu.Combo:MenuElement({id = "wcombo", name = "Use [W] in Combo", value = true})
-    self.Menu.Combo:MenuElement({id = "wcombohc", name = "[W] HitChance >=", value = 0.5, min = 0.1, max = 1.0, step = 0.1})
-    self.Menu.Combo:MenuElement({id = "ecombo", name = "Use [E] in Combo", value = true})
-    self.Menu.Combo:MenuElement({id = "rcombo", name = "Use [R] in Combo", value = true})
-    self.Menu.Combo:MenuElement({id = "rcombocount", name = "[R] HitCount >=", value = 3, min = 1, max = 5, step = 1})
+    self.Menu.Combo:MenuElement({id = "qcombo", name = "Use [Q] in Combo", value = true, leftIcon = BrandQIcon})
+    self.Menu.Combo:MenuElement({id = "qcombohc", name = "[Q] HitChance >=", value = 0.7, min = 0.1, max = 1.0, step = 0.1, leftIcon = BrandQIcon})
+    self.Menu.Combo:MenuElement({id = "wcombo", name = "Use [W] in Combo", value = true, leftIcon = BrandWIcon})
+    self.Menu.Combo:MenuElement({id = "wcombohc", name = "[W] HitChance >=", value = 0.5, min = 0.1, max = 1.0, step = 0.1, leftIcon = BrandWIcon})
+    self.Menu.Combo:MenuElement({id = "ecombo", name = "Use [E] in Combo", value = true, leftIcon = BrandEIcon})
+    self.Menu.Combo:MenuElement({id = "rcombo", name = "Use [R] in Combo", value = true, leftIcon = BrandRIcon})
+    self.Menu.Combo:MenuElement({id = "rcombocount", name = "[R] HitCount >=", value = 3, min = 1, max = 5, step = 1, leftIcon = BrandRIcon})
 
 
     -- Auto
     self.Menu:MenuElement({id = "Auto", name = "Auto", type = MENU})
-    self.Menu.Auto:MenuElement({id = "qks", name = "[Q] KS", value = true})
-    self.Menu.Auto:MenuElement({id = "wks", name = "[W] KS", value = true})
-    self.Menu.Auto:MenuElement({id = "eks", name = "[E] KS", value = true})
-    self.Menu.Auto:MenuElement({id = "dyingr", name = "[R] when dying", value = true})
+    self.Menu.Auto:MenuElement({id = "qks", name = "[Q] KS", value = true, leftIcon = BrandQIcon})
+    self.Menu.Auto:MenuElement({id = "wks", name = "[W] KS", value = true, leftIcon = BrandWIcon})
+    self.Menu.Auto:MenuElement({id = "eks", name = "[E] KS", value = true, leftIcon = BrandEIcon})
+    self.Menu.Auto:MenuElement({id = "dyingr", name = "[R] when dying", value = true, leftIcon = BrandRIcon})
 
 
     -- LaneClear
     self.Menu:MenuElement({id = "laneclear", name = "LaneClear", type = MENU})
-    self.Menu.laneclear:MenuElement({id = "wlaneclear", name = "Use [W] in LaneClear", value = true})
-    self.Menu.laneclear:MenuElement({id = "wlaneclearcount", name = "[W] HitCount >=", value = 3, min = 1, max = 7})
-    self.Menu.laneclear:MenuElement({id = "wlaneclearmana", name = "[W] Mana >=", value = 40, min = 0, max = 100, step = 5, identifier = "%"})
+    self.Menu.laneclear:MenuElement({id = "wlaneclear", name = "Use [W] in LaneClear", value = true, leftIcon = BrandWIcon})
+    self.Menu.laneclear:MenuElement({id = "wlaneclearcount", name = "[W] HitCount >=", value = 3, min = 1, max = 7, leftIcon = BrandWIcon})
+    self.Menu.laneclear:MenuElement({id = "wlaneclearmana", name = "[W] Mana >=", value = 40, min = 0, max = 100, step = 5, identifier = "%", leftIcon = BrandWIcon})
 
 
     -- Draws
     self.Menu:MenuElement({id = "Draws", name = "Draws", type = MENU})
-    self.Menu.Draws:MenuElement({id = "qdraw", name = "Draw [Q] Range", value = false})
-    self.Menu.Draws:MenuElement({id = "wdraw", name = "Draw [W] Range", value = false})
-    self.Menu.Draws:MenuElement({id = "edraw", name = "Draw [E] Range", value = false})
-    self.Menu.Draws:MenuElement({id = "rdraw", name = "Draw [R] Range", value = false})
+    self.Menu.Draws:MenuElement({id = "qdraw", name = "Draw [Q] Range", value = false, leftIcon = BrandQIcon})
+    self.Menu.Draws:MenuElement({id = "wdraw", name = "Draw [W] Range", value = false, leftIcon = BrandWIcon})
+    self.Menu.Draws:MenuElement({id = "edraw", name = "Draw [E] Range", value = false, leftIcon = BrandEIcon})
+    self.Menu.Draws:MenuElement({id = "rdraw", name = "Draw [R] Range", value = false, leftIcon = BrandRIcon})
 
 
 end
 
 function Brand:Spells()
-    QSpellData = {speed = 1600, range = QRange, delay = 0.25, radius = 60, collision = {"minion"}, type = "linear"}
+    QSpellData = {speed = 1600, range = QRange, delay = 0.25, radius = 70, collision = {"minion"}, type = "linear"}
     WSpellData = {speed = math.huge, range = WRange, delay = 0.85, radius = 200, collision = {}, type = "circular"}
 end
 
@@ -764,8 +769,11 @@ function Brand:DyingR(enemy)
 end
 
 function Brand:WLaneClear(minion)
-    if ValidTarget(minion, WRange) and self:CanUse(_W, "LaneClear") and GetMinionCount(WRange, 250, minion) >= self.Menu.laneclear.wlaneclearcount:Value() and self:CastingChecks() and myHero.attackData.state ~= 2 then
-        Control.CastSpell(HK_W, minion)
+    if ValidTarget(minion, WRange) and self:CanUse(_W, "LaneClear") and self:CastingChecks() and myHero.attackData.state ~= 2 and GetMinionCount(WRange, 200, minion) >= self.Menu.laneclear.wlaneclearcount:Value() then
+        local pred = _G.PremiumPrediction:GetPrediction(myHero, minion, WSpellData)
+        if pred.CastPos and pred.HitChance >= 0.25 then
+            Control.CastSpell(HK_W, pred.CastPos)
+        end
     end
 end
 
@@ -781,6 +789,9 @@ local QRange = 1240 + myHero.boundingRadius
 local WRange = 1175 + myHero.boundingRadius
 local ERange = 1100 + myHero.boundingRadius
 local RRange = 3400 + myHero.boundingRadius
+local LuxPassive = "LuxIlluminatingFraulein"
+local LuxESlow = "luxeslow"
+
 
 function Lux:Menu() 
     self.Menu = MenuElement({type = MENU, id = "Lux", name = "dnsLux"})
@@ -793,6 +804,7 @@ function Lux:Menu()
     self.Menu.combo:MenuElement({id = "wcombohp", name = "[W] HP <=", value = 80, min = 5, max = 95, step = 5, identifier = "%"})
     self.Menu.combo:MenuElement({id = "ecombo", name = "Use [E] in Combo", value = true})
     self.Menu.combo:MenuElement({id = "ecombohc", name = "[E] HitChance >=", value = 0.5, min = 0.1, max = 1.0, step = 0.1})
+    self.Menu.combo:MenuElement({id = "ecombocount", name = "[E] PokeCount >=", value = 1, min = 1, max = 5, step = 1})
     self.Menu.combo:MenuElement({id = "rcombo", name = "Use [R] in Combo", value = true})
     self.Menu.combo:MenuElement({id = "rcombohc", name = "[R] HitChance >=", value = 0.5, min = 0.1, max = 1.0, step = 0.1})
 
@@ -803,6 +815,12 @@ function Lux:Menu()
     self.Menu.auto:MenuElement({id = "wauto", name = "Use [W] Auto", value = true})
     self.Menu.auto:MenuElement({id = "eauto", name = "Use [E] KS", value = true})
     self.Menu.auto:MenuElement({id = "rauto", name = "Use [R] KS", value = true})
+
+    -- LaneClear
+    self.Menu:MenuElement({id = "laneclear", name = "LaneClear", type = MENU})
+    self.Menu.laneclear:MenuElement({id = "elaneclear", name = "Use [E] in LaneClear", value = true})
+    self.Menu.laneclear:MenuElement({id = "elaneclearcount", name = "[E] HitCount >=", value = 3, min = 1, max = 7, step = 1})
+    self.Menu.laneclear:MenuElement({id = "elaneclearmana", name = "[E] Mana >=", value = 40, min = 0, max = 100, step = 5, identifier = "%"})
 
 
     -- Draws
@@ -835,6 +853,116 @@ function Lux:Draws()
         Draw.Circle(myHero, RRange, 2, Draw.Color(255, 255, 255, 255))
     end
 end
+
+function Lux:Tick()
+    if _G.JustEvade and _G.JustEvade:Evading() or (_G.ExtLibEvade and _G.ExtLibEvade.Evading) or Game.IsChatOpen() or myHero.dead then return end
+    target = GetTarget(1300)
+    CastingQ = myHero.activeSpell.name == "LuxLightBinding"
+    CastingW = myHero.activeSpell.name == "LuxPrismaticWave"
+    CastingE = myHero.activeSpell.name == "LuxLightStrikeKugel"
+    CastingE2 = myHero.activeSpell.name == "LuxLightStrikeToggle"
+    CastingR = myHero.activeSpell.name == "LuxMaliceCannon"
+    if EnemyLoaded == false then
+        local CountEnemy = 0
+        for i, enemy in pairs(EnemyHeroes) do
+            CountEnemy = CountEnemy + 1
+        end
+        if CountEnemy < 1 then
+            GetEnemyHeroes()
+        else
+            EnemyLoaded = true
+            PrintChat("Enemy Loaded")
+        end
+    end
+    self:Logic()
+    self:Auto()
+    self:Minions()
+end
+
+function Lux:CastingChecks()
+    if not CastingQ or not CastingW or not CastingE or not CastingE2 or not CastingR then
+        return true
+    else
+        return false
+    end
+end
+
+function Lux:CanUse(spell, mode)
+    if mode == nil then 
+        mode = Mode()
+    end
+
+    if spell == _Q then
+        if mode == "Combo" and IsReady(_Q) and self.Menu.combo.qcombo:Value() then
+            return true
+        end
+        if mode == "Auto" and IsReady(_Q) and self.Menu.auto.qauto:Value() then
+            return true
+        end
+    end
+    if spell == _W then
+        if mode == "Combo" and IsReady(_W) and self.Menu.combo.wcombo:Value() then
+            return true
+        end
+        if mode == "Auto" and IsReady(_W) and self.Menu.auto.wauto:Value() then
+            return true
+        end
+    end
+    if spell == _E then
+        if mode == "Combo" and IsReady(_E) and self.Menu.combo.ecombo:Value() then
+            return true
+        end
+        if mode == "KS" and IsReady(_E) and self.Menu.auto.eauto:Value() then
+            return true
+        end
+        if mode == "LaneClear" and IsReady(_E) and self.Menu.laneclear.elaneclear:Value() and myHero.mana / myHero.maxMana >= self.Menu.laneclear.elaneclearmana:Value() / 100 then
+            return true
+        end
+    end
+    if spell == _R then
+        if mode == "Combo" and IsReady(_R) and self.Menu.combo.rcombo:Value() then
+            return true
+        end
+        if mode == "KS" and IsReady(_R) and self.Menu.auto.rauto:Value() then
+            return true
+        end
+    end
+end
+
+
+
+function Lux:Logic() 
+    if target == nil then return end
+
+    if Mode() == "Combo" then
+        self:QCombo()
+    end
+end
+
+function Lux:Auto()
+    for i, enemy in pairs(EnemyHeroes) do
+
+    end
+end
+
+function Lux:Minions()
+    local minions = _G.SDK.ObjectManager:GetEnemyMinions(ERange)
+    for i = 1, #minions do
+        local minion = minions[i]
+    end
+end
+
+-- [functions] --
+
+function Lux:QCombo()
+    if ValidTarget(target, QRange) and self:CanUse(_Q, "Combo") and self:CastingChecks() then
+        local pred = _G.PremiumPrediction:GetPrediction(myHero, target, QSpellData)
+        if pred.CastPos and pred.HitChance >= self.Menu.combo.qcombohc:Value() then
+            Control.CastSpell(HK_Q, pred.CastPos)
+        end
+    end
+end
+
 
 function OnLoad()
     Manager()
