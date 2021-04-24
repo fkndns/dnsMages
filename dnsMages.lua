@@ -533,6 +533,7 @@ end
 class "Brand"
 
 local EnemyLoaded = false
+local AARange = 530 + myHero.boundingRadius
 local QRange = 980 + myHero.boundingRadius
 local WRange = 830 + myHero.boundingRadius
 local ERange = 556 + myHero.boundingRadius
@@ -580,6 +581,11 @@ function Brand:Menu()
     self.Menu.Draws:MenuElement({id = "edraw", name = "Draw [E] Range", value = false, leftIcon = BrandEIcon})
     self.Menu.Draws:MenuElement({id = "rdraw", name = "Draw [R] Range", value = false, leftIcon = BrandRIcon})
 
+    --misc
+    self.Menu:MenuElement({id = "misc", name = "Misc", type = MENU})
+    self.Menu.misc:MenuElement({id = "movementhelper", name = "RangeHelper", value = false})
+    self.Menu.misc:MenuElement({id = "blockaa", name = "Block [AA] in Combo"})
+    self.Menu.misc:MenuElement({id = "blockaalvl", name = "Block [AA] after lvl", value = 9, min = 1, max = 18})
 
 end
 
@@ -605,7 +611,14 @@ end
 
 function Brand:Tick()
     if _G.JustEvade and _G.JustEvade:Evading() or (_G.ExtLibEvade and _G.ExtLibEvade.Evading) or Game.IsChatOpen() or myHero.dead then return end
-    target = GetTarget(1200)
+    target = GetTarget(QRange)
+    if target and ValidTarget(target) then
+        --PrintChat(target.pos:To2D())
+        --PrintChat(mousePos:To2D())
+        GaleMouseSpot = self:MoveHelper(target)
+    else
+        _G.SDK.Orbwalker.ForceMovement = nil
+    end
     CastingQ = myHero.activeSpell.name == "BrandQ"
     CastingW = myHero.activeSpell.name == "BrandW"
     CastingE = myHero.activeSpell.name == "BrandE"
@@ -625,6 +638,7 @@ function Brand:Tick()
     self:Logic()
     self:Auto()
     self:Minions()
+    self:AABlock()
 end
 
 function Brand:CastingChecks()
@@ -720,7 +734,7 @@ end
 -- [functions] -- 
 
 function Brand:QCombo(enemy)
-    if ValidTarget(enemy, QRange) and self:CanUse(_Q, "Combo") and GetBuffDuration(enemy, PassiveBuff) >= 0.1 then
+    if ValidTarget(enemy, QRange) and self:CanUse(_Q, "Combo") and BuffActive(enemy, PassiveBuff) then
         local pred = _G.PremiumPrediction:GetPrediction(myHero, enemy, QSpellData)
         if pred.CastPos and pred.HitChance >= self.Menu.Combo.qcombohc:Value() and self:CastingChecks() then
             Control.CastSpell(HK_Q, pred.CastPos)
@@ -729,8 +743,9 @@ function Brand:QCombo(enemy)
 end
 
 function Brand:WCombo()
-    if ValidTarget(target, WRange) and self:CanUse(_W, "Combo") then
-        local pred = _G.PremiumPrediction:GetPrediction(myHero, target, WSpellData)
+    local WTarget = GetTarget(WRange)
+    if ValidTarget(WTarget, WRange) and self:CanUse(_W, "Combo") then
+        local pred = _G.PremiumPrediction:GetPrediction(myHero, WTarget, WSpellData)
         if pred.CastPos and pred.HitChance >= self.Menu.Combo.wcombohc:Value() and self:CastingChecks() and myHero.attackData.state ~= 2 then
             Control.CastSpell(HK_W, pred.CastPos)
         end
@@ -738,6 +753,7 @@ function Brand:WCombo()
 end
 
 function Brand:ECombo()
+    local ETarget = GetTarget(ERange)
     if ValidTarget(target, ERange) and self:CanUse(_E, "Combo") and self:CastingChecks() and myHero.attackData.state ~= 2 then
         Control.CastSpell(HK_E, target)
     end
@@ -783,7 +799,7 @@ function Brand:EKS(enemy)
 end
 
 function Brand:DyingR(enemy)
-    if ValidTarget(enemy, RRange) and self:CanUse(_R, "Dying") and myHero.health / myHero.maxHealth <= 0.15 and enemy.activeSpell.target == myHero.handle then
+    if ValidTarget(enemy, RRange) and self:CanUse(_R, "Dying") and myHero.health / myHero.maxHealth <= 0.20 then
         Control.CastSpell(HK_R, enemy)
     end
 end
@@ -797,6 +813,64 @@ function Brand:WLaneClear(minion)
     end
 end
 
+function Brand:AABlock()
+    if self.Menu.misc.blockaa:Value() then
+        if myHero.levelData.lvl >= self.Menu.misc.blockaalvl:Value() then
+            if Mode() == "Combo" then
+                _G.SDK.Orbwalker:SetAttack(false)
+            else
+                _G.SDK.Orbwalker:SetAttack(true)
+            end
+        end
+    end
+end
+
+function Brand:MoveHelper(unit)
+    local EAARangel = _G.SDK.Data:GetAutoAttackRange(unit)
+    local MoveSpot = nil
+    local RangeDif = AARange - EAARangel
+    local ExtraRangeDist = RangeDif
+    local ExtraRangeChaseDist = RangeDif - 100
+
+    local ScanDirection = Vector((myHero.pos-mousePos):Normalized())
+    local ScanDistance = GetDistance(myHero.pos, unit.pos) * 0.8
+    local ScanSpot = myHero.pos - ScanDirection * ScanDistance
+    
+
+    local MouseDirection = Vector((unit.pos-ScanSpot):Normalized())
+    local MouseSpotDistance = EAARangel + ExtraRangeDist
+    if not IsFacing(unit) then
+        MouseSpotDistance = EAARangel + ExtraRangeChaseDist
+    end
+    if MouseSpotDistance > AARange then
+        MouseSpotDistance = AARange
+    end
+
+    local MouseSpot = unit.pos - MouseDirection * (MouseSpotDistance)
+    local MouseDistance = GetDistance(unit.pos, mousePos)
+    local GaleMouseSpotDirection = Vector((myHero.pos-MouseSpot):Normalized())
+    local GalemouseSpotDistance = GetDistance(myHero.pos, MouseSpot)
+    if GalemouseSpotDistance > 300 then
+        GalemouseSpotDistance = 300
+    end
+    local GaleMouseSpoty = myHero.pos - GaleMouseSpotDirection * GalemouseSpotDistance
+    MoveSpot = MouseSpot
+
+    if MoveSpot then
+        if GetDistance(myHero.pos, MoveSpot) < 50 or IsUnderEnemyTurret(MoveSpot) then
+            _G.SDK.Orbwalker.ForceMovement = nil
+        elseif self.Menu.misc.movementhelper:Value() and GetDistance(myHero.pos, unit.pos) <= AARange-50 and (Mode() == "Combo" or Mode() == "Harass") and self:CastingChecks() and MouseDistance < 750 then
+            _G.SDK.Orbwalker.ForceMovement = MoveSpot
+        else
+            _G.SDK.Orbwalker.ForceMovement = nil
+        end
+    end
+    return GaleMouseSpoty
+end
+
+function OnLoad()
+    Manager()
+end
 
 function OnLoad()
     Manager()
