@@ -474,6 +474,26 @@ local function GetMinionCount(checkrange, range, pos)
     return count
 end
 
+local function dnsTargetSelector(unit, range)
+    local fullDamUnit = (unit.totalDamage + unit.ap * 0.7)
+    local healthPercentUnit = (unit.health / unit.maxHealth)
+    local unitStrength = fullDamUnit / healthPercentUnit
+    local dtarget = nil
+    if dtarget ~= nil then
+        local fullDamdtarget = (dtarget.totalDamage + dtarget.ap * 0.7) 
+        local healthPercentdtarget = (dtarget.health / dtarget.maxHealth) 
+        local dtargetStrength = fullDamdtarget / healthPercentdtarget
+    end
+    if ValidTarget(unit, range) then
+        --PrintChat("target")
+        if dtarget == nil or unitStrength > dtargetStrength then
+            dtarget = unit
+            PrintChat(dtarget.charName)
+        end
+    end
+    return dtarget
+end
+
 class "Manager"
 
 function Manager:__init()
@@ -564,8 +584,8 @@ function Brand:Menu()
 end
 
 function Brand:Spells()
-    QSpellData = {speed = 1600, range = QRange, delay = 0.25, radius = 70, collision = {"minion"}, type = "linear"}
-    WSpellData = {speed = math.huge, range = WRange, delay = 0.85, radius = 200, collision = {}, type = "circular"}
+    QSpellData = {speed = 1600, range = QRange, delay = 0.25, radius = 60, collision = {"minion"}, type = "linear"}
+    WSpellData = {speed = math.huge, range = WRange, delay = 0.85, radius = 120, collision = {}, type = "circular"}
 end
 
 function Brand:Draws()
@@ -785,58 +805,104 @@ end
 class "Lux"
 
 local EnemyLoaded = false
-local QRange = 1240 + myHero.boundingRadius
-local WRange = 1175 + myHero.boundingRadius
-local ERange = 1100 + myHero.boundingRadius
-local RRange = 3400 + myHero.boundingRadius
+local AllyLoaded = false
+
+-- lux icons
+local HeroIcon = "https://www.proguides.com/public/media/rlocal/champion/splash/99.jpg"
+local QIcon = "https://www.proguides.com/public/media/rlocal/champion/ability/thumbnail/LuxLightBinding.png"
+local WIcon = "https://www.proguides.com/public/media/rlocal/champion/ability/thumbnail/LuxPrismaticWave.png"
+local EIcon = "https://www.proguides.com/public/media/rlocal/champion/ability/thumbnail/LuxLightStrikeKugel.png"
+local RIcon = "https://www.proguides.com/public/media/rlocal/champion/ability/thumbnail/LuxMaliceCannon.png"
+
+-- ranges
+local AARange = 530 + myHero.boundingRadius
+local QRange = 1105 + myHero.boundingRadius
+local WRange = 1075 + myHero.boundingRadius
+local ERange = 1070 + myHero.boundingRadius
+local RRange = 3350 + myHero.boundingRadius
+
+-- buffs
 local LuxPassive = "LuxIlluminatingFraulein"
 local LuxESlow = "luxeslow"
+local LuxQBuff = "LuxLightBindingMis"
 
+--counts 
+local RCount = nil
+local RMinionCount = nil
+local EMinionCount = nil
 
 function Lux:Menu() 
     self.Menu = MenuElement({type = MENU, id = "Lux", name = "dnsLux"})
 
     -- Combo
     self.Menu:MenuElement({id = "combo", name = "Combo", type = MENU})
-    self.Menu.combo:MenuElement({id = "qcombo", name = "Use [Q] in Combo", value = true})
-    self.Menu.combo:MenuElement({id = "qcombohc", name = "[Q] HitChance >=", value = 0.5, min = 0.1, max = 1.0, step = 0.1})
-    self.Menu.combo:MenuElement({id = "wcombo", name = "Use [W] in Combo", value = true})
-    self.Menu.combo:MenuElement({id = "wcombohp", name = "[W] HP <=", value = 80, min = 5, max = 95, step = 5, identifier = "%"})
-    self.Menu.combo:MenuElement({id = "ecombo", name = "Use [E] in Combo", value = true})
-    self.Menu.combo:MenuElement({id = "ecombohc", name = "[E] HitChance >=", value = 0.5, min = 0.1, max = 1.0, step = 0.1})
-    self.Menu.combo:MenuElement({id = "ecombocount", name = "[E] PokeCount >=", value = 1, min = 1, max = 5, step = 1})
-    self.Menu.combo:MenuElement({id = "rcombo", name = "Use [R] in Combo", value = true})
-    self.Menu.combo:MenuElement({id = "rcombohc", name = "[R] HitChance >=", value = 0.5, min = 0.1, max = 1.0, step = 0.1})
+    self.Menu.combo:MenuElement({id = "qcombo", name = "Use [Q] in Combo", value = true, leftIcon = QIcon})
+    self.Menu.combo:MenuElement({id = "qcombohc", name = "[Q] HitChance >=", value = 0.5, min = 0.25, max = 1.0, step = 0.25, leftIcon = QIcon})
+    self.Menu.combo:MenuElement({id = "wcombo", name = "Use [W] in Combo", value = true, leftIcon = WIcon})
+    self.Menu.combo:MenuElement({id = "wcombohp", name = "[W] HP <=", value = 80, min = 5, max = 95, step = 5, identifier = "%", leftIcon = WIcon})
+    self.Menu.combo:MenuElement({id = "wcomboally", name = "[W] Allies", type = MENU, leftIcon = WIcon})
+    self.Menu.combo:MenuElement({id = "ecombo", name = "Use [E] in Combo", value = true, leftIcon = EIcon})
+    self.Menu.combo:MenuElement({id = "ecombohc", name = "[E] HitChance >=", value = 0.5, min = 0.25, max = 1.0, step = 0.25, leftIcon = EIcon})
+    self.Menu.combo:MenuElement({id = "ecombocount", name = "[E] PokeCount >=", value = 1, min = 1, max = 5, step = 1, leftIcon = EIcon})
+    self.Menu.combo:MenuElement({id = "rcombo", name = "Use [R] on immobile Target", value = true, leftIcon = RIcon})
+    self.Menu.combo:MenuElement({id = "rmassiv", name = "[R] to Damage multiple Enemies", value = true, leftIcon = RIcon})
+    self.Menu.combo:MenuElement({id = "rmassivcount", name = "[R] HitCount >=", value = 3, min = 1, max = 5, step = 1, leftIcon = RIcon})
 
 
     -- Auto
     self.Menu:MenuElement({id = "auto", name = "Auto", type = MENU})
-    self.Menu.auto:MenuElement({id = "qauto", name = "Use [Q] Auto", value = true})
-    self.Menu.auto:MenuElement({id = "wauto", name = "Use [W] Auto", value = true})
-    self.Menu.auto:MenuElement({id = "eauto", name = "Use [E] KS", value = true})
-    self.Menu.auto:MenuElement({id = "rauto", name = "Use [R] KS", value = true})
+    self.Menu.auto:MenuElement({id = "qauto", name = "Use [Q] KS", value = true, leftIcon = QIcon})
+    self.Menu.auto:MenuElement({id = "qinterrupt", name = "Use [Q] Interrupter", value = true, leftIcon = QIcon})
+    self.Menu.auto:MenuElement({id = "wauto", name = "Use [W] Auto", value = true, leftIcon = WIcon})
+    self.Menu.auto:MenuElement({id = "wautohp", name = "[W] HP <=", value = 25, min = 5, max = 100, step = 5, identifier = "%", leftIcon = WIcon})
+    self.Menu.auto:MenuElement({id = "wautoally", name = "[W] Allies", type = MENU, leftIcon = WIcon})
+    self.Menu.auto:MenuElement({id = "eauto", name = "Use [E] KS", value = true, leftIcon = EIcon})
+    self.Menu.auto:MenuElement({id = "rauto", name = "Use [R] KS", value = true, leftIcon = RIcon})
 
     -- LaneClear
     self.Menu:MenuElement({id = "laneclear", name = "LaneClear", type = MENU})
-    self.Menu.laneclear:MenuElement({id = "elaneclear", name = "Use [E] in LaneClear", value = true})
-    self.Menu.laneclear:MenuElement({id = "elaneclearcount", name = "[E] HitCount >=", value = 3, min = 1, max = 7, step = 1})
-    self.Menu.laneclear:MenuElement({id = "elaneclearmana", name = "[E] Mana >=", value = 40, min = 0, max = 100, step = 5, identifier = "%"})
+    self.Menu.laneclear:MenuElement({id = "elaneclear", name = "Use [E] in LaneClear", value = true, leftIcon = EIcon})
+    self.Menu.laneclear:MenuElement({id = "elaneclearcount", name = "[E] HitCount >=", value = 3, min = 1, max = 7, step = 1, leftIcon = EIcon})
+    self.Menu.laneclear:MenuElement({id = "elaneclearmana", name = "[E] Mana >=", value = 40, min = 0, max = 100, step = 5, identifier = "%", leftIcon = EIcon})
+    self.Menu.laneclear:MenuElement({id = "rlaneclear", name = "Use [R] in LaneClear", value = true, leftIcon = RIcon})
+    self.Menu.laneclear:MenuElement({id = "rlaneclearcount", name = "[R] HitCount >=", value = 6, min = 1, max = 7, step = 1, leftIcon = RIcon})
+    self.Menu.laneclear:MenuElement({id = "rlaneclearmana", name = "[R] Mana >=", value = 40, min = 0, max = 100, step = 5, identifier = "%", leftIcon = RIcon})
+
+    --LastHit
+    self.Menu:MenuElement({id = "lasthit", name = "LastHit", type = MENU})
+    self.Menu.lasthit:MenuElement({id = "qlasthit", name = "Use [Q] on Cannon", value = true, leftIcon = QIcon})
+    self.Menu.lasthit:MenuElement({id = "qlasthitmana", name = "[Q] Mana >=", value = 40, min = 5, max = 100, step = 5, identifier = "%", leftIcon = QIcon})
+    self.Menu.lasthit:MenuElement({id = "elasthit", name = "Use [E] to LastHit", value = true, leftIcon = EIcon})
+    self.Menu.lasthit:MenuElement({id = "elasthitcount", name = "[E] HitCount >=", value = 2, min = 1, max = 7, step = 1, leftIcon = EIcon})
+    self.Menu.lasthit:MenuElement({id = "elasthitmana", name = "[E] Mana >=", value = 40, min = 5, max = 100, step = 5, identifier= "%", leftIcon = EIcon})
 
 
     -- Draws
     self.Menu:MenuElement({id = "draws", name = "Draws", type = MENU})
-    self.Menu.draws:MenuElement({id = "qdraws", name = "Draw [Q] Range", value = false})
-    self.Menu.draws:MenuElement({id = "wdraws", name = "Draw [W] Range", value = false})
-    self.Menu.draws:MenuElement({id = "edraws", name = "Draw [E] Range", value = false})
-    self.Menu.draws:MenuElement({id = "rdraws", name = "Draw [R] Range", value = false})
+    self.Menu.draws:MenuElement({id = "qdraws", name = "Draw [Q] Range", value = false, leftIcon = QIcon})
+    self.Menu.draws:MenuElement({id = "wdraws", name = "Draw [W] Range", value = false, leftIcon = WIcon})
+    self.Menu.draws:MenuElement({id = "edraws", name = "Draw [E] Range", value = false, leftIcon = EIcon})
+    self.Menu.draws:MenuElement({id = "rdraws", name = "Draw [R] Range", value = false, leftIcon = RIcon})
+
+    self.Menu:MenuElement({id = "misc", name = "Misc", type = MENU})
+    self.Menu.misc:MenuElement({id = "movementhelper", name = "RangedHelper", value = false})
+    self.Menu.misc:MenuElement({id = "blockaa", name = "Block [AA] in Combo", value = true})
+    self.Menu.misc:MenuElement({id = "blockaalvl", name = "If [lvl] is higher then", value = 9, min = 1, max = 18, step = 1})
 
 end
 
+function Lux:ActiveMenu()
+    for i, ally in pairs(AllyHeroes) do
+        self.Menu.combo.wcomboally:MenuElement({id = ally.charName, name = ally.charName, value = true})
+        self.Menu.auto.wautoally:MenuElement({id = ally.charName, name = ally.charName, value = true})
+    end
+end
+
 function Lux:Spells() 
-    QSpellData = {speed = 1200, range = QRange, delay = 0.25, radius = 70, collision = {"minion"}, type = "linear"}
-    WSpellData = {speed = 2400, range = WRange, delay = 0.25, radius = 110, collision = {}, type = "linear"}
-    ESpellData = {speed = 1200, range = ERange, delay = 0.25, radius = 300, collision = {}, type = "circular"}
-    RSpellData = {speed = math.huge, range = RRange, delay = 1, radius = 120, collision = {}, type = "linear"}
+    QSpellData = {speed = 1100, range = QRange - 50, delay = 0.25, radius = 60, collision = {"minion"}, type = "linear"}
+    WSpellData = {speed = 2400, range = WRange - 50, delay = 0.25, radius = 60, collision = {}, type = "linear"}
+    ESpellData = {speed = 1200, range = ERange - 50, delay = 0.25, radius = 120, collision = {}, type = "circular"}
+    RSpellData = {speed = math.huge, range = RRange - 50, delay = 1, radius = 60, collision = {}, type = "linear"}
 end
 
 function Lux:Draws()
@@ -856,11 +922,18 @@ end
 
 function Lux:Tick()
     if _G.JustEvade and _G.JustEvade:Evading() or (_G.ExtLibEvade and _G.ExtLibEvade.Evading) or Game.IsChatOpen() or myHero.dead then return end
-    target = GetTarget(1300)
+    target = GetTarget(RRange)
+    if target and ValidTarget(target) then
+        --PrintChat(target.pos:To2D())
+        --PrintChat(mousePos:To2D())
+        GaleMouseSpot = self:MoveHelper(target)
+    else
+        _G.SDK.Orbwalker.ForceMovement = nil
+    end
     CastingQ = myHero.activeSpell.name == "LuxLightBinding"
     CastingW = myHero.activeSpell.name == "LuxPrismaticWave"
     CastingE = myHero.activeSpell.name == "LuxLightStrikeKugel"
-    CastingE2 = myHero.activeSpell.name == "LuxLightStrikeToggle"
+    CastingE2 = myHero.activeSpell.name == "LuxLightstrikeToggle"
     CastingR = myHero.activeSpell.name == "LuxMaliceCannon"
     if EnemyLoaded == false then
         local CountEnemy = 0
@@ -874,9 +947,23 @@ function Lux:Tick()
             PrintChat("Enemy Loaded")
         end
     end
+    if AllyLoaded == false then
+        local CountAlly = 0
+        for i, ally in pairs(AllyHeroes) do
+            CountAlly = CountAlly + 1
+        end
+        if CountAlly < 1 then
+            GetAllyHeroes()
+        else
+            AllyLoaded = true
+            PrintChat("Ally Loaded")
+            self:ActiveMenu()
+        end
+    end
     self:Logic()
     self:Auto()
     self:Minions()
+    self:AABlock()
 end
 
 function Lux:CastingChecks()
@@ -896,7 +983,13 @@ function Lux:CanUse(spell, mode)
         if mode == "Combo" and IsReady(_Q) and self.Menu.combo.qcombo:Value() then
             return true
         end
-        if mode == "Auto" and IsReady(_Q) and self.Menu.auto.qauto:Value() then
+        if mode == "KS" and IsReady(_Q) and self.Menu.auto.qauto:Value() then
+            return true
+        end
+        if mode == "Interrupter" and IsReady(_Q) and self.Menu.auto.qinterrupt:Value() then
+            return true
+        end
+        if mode == "LastHit" and IsReady(_Q) and self.Menu.lasthit.qlasthit:Value() and myHero.mana / myHero.maxMana >= self.Menu.lasthit.qlasthitmana:Value() / 100 then
             return true
         end
     end
@@ -918,12 +1011,21 @@ function Lux:CanUse(spell, mode)
         if mode == "LaneClear" and IsReady(_E) and self.Menu.laneclear.elaneclear:Value() and myHero.mana / myHero.maxMana >= self.Menu.laneclear.elaneclearmana:Value() / 100 then
             return true
         end
+        if mode == "LastHit" and IsReady(_E) and self.Menu.lasthit.elasthit:Value() and myHero.mana / myHero.maxMana >= self.Menu.lasthit.elasthitmana:Value() / 100 then
+            return true
+        end
     end
     if spell == _R then
         if mode == "Combo" and IsReady(_R) and self.Menu.combo.rcombo:Value() then
             return true
         end
         if mode == "KS" and IsReady(_R) and self.Menu.auto.rauto:Value() then
+            return true
+        end
+        if mode == "Massiv" and IsReady(_R) and self.Menu.combo.rmassiv:Value() then
+            return true
+        end
+        if mode == "LaneClear" and IsReady(_R) and self.Menu.laneclear.rlaneclear:Value() and myHero.mana / myHero.maxMana >= self.Menu.laneclear.rlaneclearmana:Value() / 100 then
             return true
         end
     end
@@ -936,33 +1038,353 @@ function Lux:Logic()
 
     if Mode() == "Combo" then
         self:QCombo()
+        self:ECombo()
+        self:RCombo()
     end
 end
 
 function Lux:Auto()
     for i, enemy in pairs(EnemyHeroes) do
+        self:EReact(enemy)
+        self:QKS(enemy)
+        self:QInterrupt(enemy)
+        self:EKS(enemy)
+        self:RKS(enemy)
+        if Mode() == "Combo" then
+            self:WCombo(enemy)
+            self:RMassive(enemy)
+        end
 
+        for j, ally in pairs(AllyHeroes) do 
+            if Mode() == "Combo" then
+                self:WComboAlly(enemy, ally)
+            end
+        end
     end
 end
 
 function Lux:Minions()
-    local minions = _G.SDK.ObjectManager:GetEnemyMinions(ERange)
+    local minions = _G.SDK.ObjectManager:GetEnemyMinions(QRange)
     for i = 1, #minions do
         local minion = minions[i]
+
+        if Mode() == "LaneClear" then
+            self:ELaneClear(minion)
+            self:RLaneClear(minion)
+        end
+        if Mode() == "LastHit" then
+            self:QLastHit(minion)
+            self:ELastHit(minion)
+        end
     end
 end
 
 -- [functions] --
 
-function Lux:QCombo()
-    if ValidTarget(target, QRange) and self:CanUse(_Q, "Combo") and self:CastingChecks() then
-        local pred = _G.PremiumPrediction:GetPrediction(myHero, target, QSpellData)
+function Lux:QCombo(enemy)
+    local QComboTarget = GetTarget(QRange)
+    if QComboTarget ~= nil and self:CanUse(_Q, "Combo") and self:CastingChecks() and myHero.attackData.state ~= 2 then
+        local pred = _G.PremiumPrediction:GetPrediction(myHero, QComboTarget, QSpellData)
         if pred.CastPos and pred.HitChance >= self.Menu.combo.qcombohc:Value() then
             Control.CastSpell(HK_Q, pred.CastPos)
         end
     end
 end
 
+function Lux:WCombo(enemy)
+    if self:CanUse(_W, "Combo") and myHero.health / myHero.maxHealth <= self.Menu.combo.wcombohp:Value() / 100 and enemy.activeSpell.valid and enemy.activeSpell.spellWasCast and self:CastingChecks() and myHero.attackData.state ~= 2 then
+        if enemy.activeSpell.target == myHero.handle then
+            Control.CastSpell(HK_W)
+        else
+            local placementPos = enemy.activeSpell.placementPos
+            local width = enemy.activeSpell.width
+            local spellLine = ClosestPointOnLineSegment(myHero.pos, enemy.pos, placementPos)
+            if GetDistance(myHero.pos, spellLine) <= width then
+                Control.CastSpell(HK_W)
+            end
+        end
+    end
+end
+
+function Lux:WComboAlly(enemy, ally)
+    if ValidTarget(ally, WRange) and self:CanUse(_W, "Combo") and ally.health / ally.maxHealth <= self.Menu.combo.wcombohp:Value() / 100 and enemy.activeSpell.valid and enemy.activeSpell.spellWasCast and self:CastingChecks() and myHero.attackData.state ~= 2 and self.Menu.combo.wcomboally[ally.charName]:Value() then
+        if enemy.activeSpell.target == ally.handle then
+            local pred = _G.PremiumPrediction:GetPrediction(myHero, ally, WSpellData)
+            if pred.CastPos and pred.HitChance >= 0.25 then 
+                Control.CastSpell(HK_W, pred.CastPos)
+            end
+        else
+            local placementPos = enemy.activeSpell.placementPos
+            local width = enemy.activeSpell.width
+            local spellLine = ClosestPointOnLineSegment(ally.pos, enemy.pos, placementPos)
+            local pred = _G.PremiumPrediction:GetPrediction(myHero, ally, WSpellData)
+            if GetDistance(ally.pos, spellLine) <= width and pred.CastPos and pred.HitChance >= 0.25 then
+                Control.CastSpell(HK_W, pred.CastPos)
+            end
+        end
+    end
+end
+
+
+function Lux:ECombo()
+    local EComboTarget = GetTarget(ERange)
+    if EComboTarget ~= nil and self:CanUse(_E, "Combo") and myHero:GetSpellData(_E).toggleState == 0 and GetEnemyCount(240, EComboTarget) >= self.Menu.combo.ecombocount:Value() then
+        local pred = _G.PremiumPrediction:GetPrediction(myHero, EComboTarget, ESpellData)
+        if pred.CastPos and pred.HitChance >= self.Menu.combo.ecombohc:Value() and self:CastingChecks() and myHero.attackData.state ~= 2 then
+            Control.CastSpell(HK_E, pred.CastPos)
+        end
+    end
+end
+
+function Lux:EReact(enemy)
+    if IsValid(enemy) and self:CanUse(_E, "Combo") and myHero:GetSpellData(_E).toggleState == 2 and BuffActive(enemy, LuxESlow) then
+        Control.CastSpell(HK_E)
+    end
+end
+
+function Lux:RCombo()
+    local RComboTarget = GetTarget(RRange)
+    if RComboTarget ~= nil and self:CanUse(_R, "Combo") and self:CastingChecks() and myHero.attackData.state ~= 2 and IsImmobile(RComboTarget) >= 0.7 then
+        local pred = _G.PremiumPrediction:GetPrediction(myHero, RComboTarget, RSpellData)
+        if pred.CastPos and pred.HitChance >= 1 then
+            if pred.CastPos:ToScreen().onScreen then
+                Control.CastSpell(HK_R, pred.CastPos)
+            else
+                local Direction = Vector((myHero.pos-pred.CastPos):Normalized())
+                local CastSpot = myHero.pos - Direction * 1000
+                Control.CastSpell(HK_R, CastSpot)
+            end
+        end
+    end
+end
+
+function Lux:RMassive(enemy)
+    if ValidTarget(enemy, RRange) and self:CanUse(_R, "Massiv") and self:CastingChecks() and myHero.attackData.state ~= 2 then
+        local count = 0
+        for j, enemy2 in pairs(EnemyHeroes) do 
+            local RLine = ClosestPointOnLineSegment(enemy2.pos, myHero.pos, enemy.pos)
+            if GetDistance(enemy2.pos, RLine) <= 120 then
+                count = count + 1
+            end
+        end
+        RCount = count
+        --PrintChat(RCount)
+        if RCount >= self.Menu.combo.rmassivcount:Value() then
+            local pred = _G.PremiumPrediction:GetPrediction(myHero, enemy, RSpellData)
+            if pred.CastPos and pred.HitChance >= 0.5 then
+                if pred.CastPos:ToScreen().onScreen then
+                    Control.CastSpell(HK_R, pred.CastPos)
+                else
+                    local Direction = Vector((myHero.pos-pred.CastPos):Normalized())
+                    local CastSpot = myHero.pos - Direction * 1000
+                    Control.CastSpell(HK_R, CastSpot)
+                end
+            end
+        end
+    end
+end
+
+function Lux:GetRDam(unit)
+    local passivdmg = 10 + 10 * myHero.levelData.lvl + myHero.ap * 0.2
+    if BuffActive(unit, LuxPassive) then
+        local QDam = getdmg("R", unit, myHero, myHero:GetSpellData(_R).level) + CalcMagicalDamage(myHero, unit, passivdmg)
+        return QDam
+    else
+        local QDam = getdmg("R", unit, myHero, myHero:GetSpellData(_R).level)
+        return QDam
+    end
+end
+
+
+function Lux:QKS(enemy)
+    if ValidTarget(enemy, QRange) and self:CanUse(_Q, "KS") and self:CastingChecks() and myHero.attackData.state ~= 2 then
+        local QDam = getdmg("Q", enemy, myHero, myHero:GetSpellData(_Q).level)
+       if enemy.health <= QDam then
+            local pred = _G.PremiumPrediction:GetPrediction(myHero, enemy, QSpellData)
+            if pred.CastPos and pred.HitChance >= 0.5 then
+                Control.CastSpell(HK_Q, pred.CastPos)
+            end
+        end
+    end
+end
+
+function Lux:QInterrupt(enemy)
+    local Timer = Game.Timer()
+    if ValidTarget(enemy, QRange) and self:CanUse(_Q, "Interrupter") and self:CastingChecks() and myHero.attackData.state ~= 2 and enemy.activeSpell.valid and enemy.activeSpell.castEndTime - Timer > 0.33 then
+        local pred = _G.PremiumPrediction:GetPrediction(myHero, enemy, QSpellData)
+        if pred.CastPos and pred.HitChance >= 0.5 then
+            Control.CastSpell(HK_Q, pred.CastPos)
+        end
+    end
+end
+
+function Lux:WAuto(enemy)
+    if self:CanUse(_W, "Auto") and myHero.health / myHero.maxHealth <= self.Menu.auto.wautohp:Value() / 100 and enemy.activeSpell.valid and enemy.activeSpell.spellWasCast and self:CastingChecks() and myHero.attackData.state ~= 2 then
+        if enemy.activeSpell.target == myHero.handle then
+            Control.CastSpell(HK_W)
+        else
+            
+        end
+    end
+end
+
+
+function Lux:EKS(enemy)
+    if ValidTarget(enemy, ERange) and self:CanUse(_E, "KS") and myHero:GetSpellData(_E).toggleState == 0 and self:CastingChecks() and myHero.attackData.state ~= 2 then
+        local EDam = getdmg("E", enemy, myHero, myHero:GetSpellData(_E).level)
+        if enemy.health <= EDam then
+            local pred = _G.PremiumPrediction:GetPrediction(myHero, enemy, ESpellData)
+            if pred.CastPos and pred.HitChance >= 0.5 then
+                Control.CastSpell(HK_E, pred.CastPos)
+            end
+        end
+    end
+end
+
+function Lux:RKS(enemy)
+    if ValidTarget(enemy, RRange) and self:CanUse(_R, "KS") and self:CastingChecks() and myHero.attackData.state ~= 2 then
+        local RDam = self:GetRDam(enemy)
+        if enemy.health <= RDam then
+            local pred = _G.PremiumPrediction:GetPrediction(myHero, enemy, RSpellData)
+            if pred.CastPos and pred.HitChance >= 0.75 then
+                if pred.CastPos:ToScreen().onScreen then
+                    Control.CastSpell(HK_R, pred.CastPos)
+                else
+                    local Direction = Vector((myHero.pos-pred.CastPos):Normalized())
+                    local CastSpot = myHero.pos - Direction * 1000
+                    Control.CastSpell(HK_R, CastSpot)
+                end
+            end
+        end
+    end
+end
+
+function Lux:ELaneClear(minion)
+    if ValidTarget(minion, ERange) and self:CanUse(_E, "LaneClear") and myHero:GetSpellData(_E).toggleState == 0 and self:CastingChecks() and myHero.attackData.state ~= 2 and GetMinionCount(ERange, 200, minion) >= self.Menu.laneclear.elaneclearcount:Value() then
+        local pred = _G.PremiumPrediction:GetPrediction(myHero, minion, ESpellData)
+        if pred.CastPos and pred.HitChance >= 0.25 then
+            Control.CastSpell(HK_E, pred.CastPos)
+        end
+    end
+    if myHero:GetSpellData(_E).toggleState == 2 then
+        Control.CastSpell(HK_E)
+    end
+end
+
+function Lux:RLaneClear(minion)
+    if ValidTarget(minion, QRange) and self:CanUse(_R, "LaneClear") and self:CastingChecks() and myHero.attackData.state ~= 2 then
+        local count = 0
+        local minions2 = _G.SDK.ObjectManager:GetEnemyMinions(QRange)
+        for i = 1, #minions2 do
+            local minion2 = minions2[i]
+            local RLine = ClosestPointOnLineSegment(minion2.pos, myHero.pos, minion.pos)
+            if GetDistance(minion2.pos, RLine) <= 120 then
+                count = count + 1
+            end
+        end
+        RMinionCount = count
+        if RMinionCount >= self.Menu.laneclear.rlaneclearcount:Value() then
+            local pred = _G.PremiumPrediction:GetPrediction(myHero, minion, RSpellData)
+            if pred.CastPos and pred.HitChance >= 0.25 then
+                Control.CastSpell(HK_R, pred.CastPos)
+            end
+        end
+    end
+end
+
+function Lux:QLastHit(minion)
+    if ValidTarget(minion, QRange) and self:CanUse(_Q, "LastHit") and myHero.attackData.state ~= 2 and (minion.charName == "SRU_ChaosMinionSiege" or minion.charName == "SRU_OrderMinionSiege") then
+        local QDam = getdmg("Q", minion, myHero, myHero:GetSpellData(_Q).level)
+        if minion.health <= QDam then
+            local pred = _G.PremiumPrediction:GetPrediction(myHero, minion, QSpellData)
+            if pred.CastPos and pred.HitChance >= 0.25 then
+                Control.CastSpell(HK_Q, pred.CastPos)
+            end
+        end
+    end
+end
+
+function Lux:ELastHit(minion)
+    if ValidTarget(minion, ERange) and self:CanUse(_E, "LastHit") and myHero.attackData.state ~= 2 then
+        local EDam = getdmg("E", minion, myHero, myHero:GetSpellData(_E).level)
+        if minion.health <= EDam then
+            local count = 0
+            local minions2 = _G.SDK.ObjectManager:GetEnemyMinions(ERange)
+            for i = 1, #minions2 do
+                local minion2 = minions2[i]
+                local EDam2 = getdmg("E", minion2, myHero, myHero:GetSpellData(_E).level)
+                if minion2.health <= EDam2 and GetDistance(minion.pos, minion2.pos) <= 200 then
+                    count = count + 1
+                end
+            end
+            EMinionCount = count
+            if EMinionCount >= self.Menu.lasthit.elasthitcount:Value() then
+                local pred = _G.PremiumPrediction:GetPrediction(myHero, minion, ESpellData)
+                if pred.CastPos and pred.HitChance >= 0.25 then
+                    Control.CastSpell(HK_E, pred.CastPos)
+                end
+            end
+        end
+    end
+    if myHero:GetSpellData(_E).toggleState == 2 then
+        Control.CastSpell(HK_E)
+    end
+end
+
+function Lux:AABlock()
+    if self.Menu.misc.blockaa:Value() then
+        if myHero.levelData.lvl >= self.Menu.misc.blockaalvl:Value() then
+            if Mode() == "Combo" then
+                _G.SDK.Orbwalker:SetAttack(false)
+            else
+                _G.SDK.Orbwalker:SetAttack(true)
+            end
+        end
+    end
+end
+
+function Lux:MoveHelper(unit)
+    local EAARangel = _G.SDK.Data:GetAutoAttackRange(unit)
+    local MoveSpot = nil
+    local RangeDif = AARange - EAARangel
+    local ExtraRangeDist = RangeDif
+    local ExtraRangeChaseDist = RangeDif - 100
+
+    local ScanDirection = Vector((myHero.pos-mousePos):Normalized())
+    local ScanDistance = GetDistance(myHero.pos, unit.pos) * 0.8
+    local ScanSpot = myHero.pos - ScanDirection * ScanDistance
+    
+
+    local MouseDirection = Vector((unit.pos-ScanSpot):Normalized())
+    local MouseSpotDistance = EAARangel + ExtraRangeDist
+    if not IsFacing(unit) then
+        MouseSpotDistance = EAARangel + ExtraRangeChaseDist
+    end
+    if MouseSpotDistance > AARange then
+        MouseSpotDistance = AARange
+    end
+
+    local MouseSpot = unit.pos - MouseDirection * (MouseSpotDistance)
+    local MouseDistance = GetDistance(unit.pos, mousePos)
+    local GaleMouseSpotDirection = Vector((myHero.pos-MouseSpot):Normalized())
+    local GalemouseSpotDistance = GetDistance(myHero.pos, MouseSpot)
+    if GalemouseSpotDistance > 300 then
+        GalemouseSpotDistance = 300
+    end
+    local GaleMouseSpoty = myHero.pos - GaleMouseSpotDirection * GalemouseSpotDistance
+    MoveSpot = MouseSpot
+
+    if MoveSpot then
+        if GetDistance(myHero.pos, MoveSpot) < 50 or IsUnderEnemyTurret(MoveSpot) then
+            _G.SDK.Orbwalker.ForceMovement = nil
+        elseif self.Menu.misc.movementhelper:Value() and GetDistance(myHero.pos, unit.pos) <= AARange-50 and (Mode() == "Combo" or Mode() == "Harass") and self:CastingChecks() and MouseDistance < 750 then
+            _G.SDK.Orbwalker.ForceMovement = MoveSpot
+        else
+            _G.SDK.Orbwalker.ForceMovement = nil
+        end
+    end
+    return GaleMouseSpoty
+end
 
 function OnLoad()
     Manager()
