@@ -590,8 +590,8 @@ function Brand:Menu()
 end
 
 function Brand:Spells()
-    QPrediction = GGPrediction:SpellPrediction({Delay = 0.25, radius = 50, Range = QRange, Speed = 1600, Collision = true, MaxCollision = 0, Type = GGPrediction.SPELLTYPE_LINE, CollisionTypes = {GGPrediction.COLLISION_MINION, GGPrediction.COLLISION_ENEMYHERO, GGPrediction.COLLISION_YASUOWALL}})  
-    WPrediction = GGPrediction:SpellPrediction({Delay = 0.877, radius = 50, Range = WRange, Speed = math.huge, Collision = false, Type = GGPrediction.SPELLTYPE_CIRCLE})
+    QPrediction = GGPrediction:SpellPrediction({Delay = 0.25, Radius = 60, Range = QRange, Speed = 1600, Collision = true, Type = GGPrediction.SPELLTYPE_LINE}) 
+    WPrediction = GGPrediction:SpellPrediction({Delay = 0.877, Radius = 60, Range = WRange, Speed = math.huge, Collision = false, Type = GGPrediction.SPELLTYPE_LINE})
 end
 
 function Brand:Draws()
@@ -988,10 +988,11 @@ function Lux:Spells()
     ESpellData = {speed = 1200, range = ERange - 50, delay = 0.25, radius = 120, collision = {}, type = "circular"}
     RSpellData = {speed = math.huge, range = RRange - 50, delay = 1, radius = 60, collision = {}, type = "linear"}
 
-    QPrediction = GGPrediction:SpellPrediction({Delay = 0.25, Radius = 60, Range = QRange, Speed = 1100, Collision = true, MaxCollision = 1, CollisionTypes = {GGPrediction.COLLISION_MINION, GGPrediction.COLLISION_ENEMYHERO}, Types = GGPrediction.SPELLTYPE_LINE})
+    QPrediction = GGPrediction:SpellPrediction({Delay = 0.25, Radius = 60, Range = QRange, Speed = 1200, Collision = true, Type = GGPrediction.SPELLTYPE_LINE})
     WPrediction = GGPrediction:SpellPrediction({Delay = 0.25, Radius = 60, Range = WRange, Speed = 2400, Collision = false, Type = GGPrediction.SPELLTYPE_LINE})
-    EPrediction = GGPrediction:SpellPrediction({Delay = 0.25, Radius = 120, Range = ERange, Speed = 1200, Collision = true, MaxCollision = 0, CollisionTypes = {GGPrediction.COLLISION_YASUOWALL}, Type = GGPrediction.SPELLTYPE_CIRCLE})
+    EPrediction = GGPrediction:SpellPrediction({Delay = 0.25, Radius = 60, Range = ERange, Speed = 1200, Collision = false, Type = GGPrediction.SPELLTYPE_CIRCLE})
     RPrediction = GGPrediction:SpellPrediction({Delay = 1.0, Radius = 60, Range = RRange, Speed = math.huge, Collision = false, Type = GGPrediction.SPELLTYPE_LINE})
+
 end
 
 function Lux:Draws()
@@ -1139,12 +1140,14 @@ function Lux:Auto()
         self:QInterrupt(enemy)
         self:EKS(enemy)
         self:RKS(enemy)
+        self:WAuto(enemy)
         if Mode() == "Combo" then
             self:WCombo(enemy)
             self:RMassive(enemy)
         end
 
         for j, ally in pairs(AllyHeroes) do 
+            self:WAutoAlly(enemy, ally)
             if Mode() == "Combo" then
                 self:WComboAlly(enemy, ally)
             end
@@ -1170,7 +1173,7 @@ end
 
 -- [functions] --
 
-function Lux:QCombo(enemy)
+function Lux:QCombo()
     local QComboTarget = GetTarget(QRange)
     if QComboTarget ~= nil and self:CanUse(_Q, "Combo") and self:CastingChecks() and myHero.attackData.state ~= 2 then
         QPrediction:GetPrediction(QComboTarget, myHero)
@@ -1311,11 +1314,36 @@ function Lux:WAuto(enemy)
         if enemy.activeSpell.target == myHero.handle then
             Control.CastSpell(HK_W)
         else
-            
+            local placementPos = enemy.activeSpell.placementPos
+            local width = myHero.boundingRadius + 50
+            if enemy.activeSpell.width > 0 then width = width + enemy.activeSpell.width end
+            local spellLine = ClosestPointOnLineSegment(myHero.pos, enemy.pos, placementPos)
+            if GetDistance(myHero.pos, spellLine) <= width then
+                Control.CastSpell(HK_W)
+            end
         end
     end
 end
 
+function Lux:WAutoAlly(enemy, ally) 
+  if ValidTarget(ally, WRange) and self:CanUse(_W, "Auto") and ally.health / ally.maxHealth <= self.Menu.auto.wautohp:Value() / 100 and enemy.activeSpell.valid and enemy.activeSpell.spellWasCast and self:CastingChecks() and myHero.attackData.state ~= 2 and self.Menu.auto.wautoally[ally.charName]:Value() then
+        if enemy.activeSpell.target == ally.handle then
+            WPrediction:GetPrediction(ally, myHero)
+            if WPrediction:CanHit(HITCHANCE_NORMAL) then 
+                Control.CastSpell(HK_W, WPrediction.CastPosition)
+            end
+        else
+            local placementPos = enemy.activeSpell.placementPos
+            local width = ally.boundingRadius + 50
+            if enemy.activeSpell.width > 0 then width = width + enemy.activeSpell.width end
+            local spellLine = ClosestPointOnLineSegment(ally.pos, enemy.pos, placementPos)
+            WPrediction:GetPrediction(ally, myHero)
+            if WPrediction:CanHit(HITCHANCE_NORMAL) and GetDistance(ally.pos, spellLine) <= width then
+                Control.CastSpell(HK_W, WPrediction.CastPosition)
+            end
+        end
+    end
+end  
 
 function Lux:EKS(enemy)
     if ValidTarget(enemy, ERange) and self:CanUse(_E, "KS") and myHero:GetSpellData(_E).toggleState == 0 and self:CastingChecks() and myHero.attackData.state ~= 2 then
