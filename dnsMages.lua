@@ -1446,7 +1446,7 @@ end
 
 function Lux:ELaneClear(minion)
     if ValidTarget(minion, E.Range) and self:CanUse(_E, "LaneClear") and myHero:GetSpellData(_E).toggleState == 0 and self:SmoothChecks() and GetMinionCount(ERange, 200, minion) >= self.Menu.laneclear.elaneclearcount:Value() then
-        CustomCast(HK_E, minion)
+        GGCast(HK_E, minion)
     end
     if myHero:GetSpellData(_E).toggleState == 2 then
         Control.CastSpell(HK_E)
