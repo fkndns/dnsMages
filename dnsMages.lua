@@ -560,7 +560,7 @@ function GGCast(spell, target, spellprediction, hitchance)
             return false
         end
         spellprediction:GetPrediction(target, myHero)
-        if spellprediction:CanHit(hitchance or HITCHANCE_HIGH) then
+        if spellprediction:CanHit(hitchance or HITCHANCE_HIGH) and GetDistance(spellprediction.CastPosition, myHero.pos) < spellprediction.Range and GetDistance(spellprediction.CastPosition, target.pos) < 250 then
             _G.Control.CastSpell(spell, spellprediction.CastPosition)
             return true
         end
@@ -609,8 +609,8 @@ local EnemyLoaded = false
 local Timer = Game.Timer()
 local ComboTimer = nil
 local AARange = 550
-local QRange = 1040
-local WRange = 900
+local QRange = 1000
+local WRange = 850
 local ERange = 615
 local RRange = 740
 local PassiveBuff = "BrandAblaze"
@@ -1066,22 +1066,22 @@ end
 
 function Lux:Draws()
     if self.Menu.draws.qdraws:Value() then
-        Draw.Circle(myHero, QRange, 2, Draw.Color(255, 255, 255, 0))
+        Draw.Circle(myHero, Q.Range, 2, Draw.Color(255, 255, 255, 0))
     end
     if self.Menu.draws.wdraws:Value() then
-        Draw.Circle(myHero, WRange, 2, Draw.Color(255, 255, 0, 255))
+        Draw.Circle(myHero, W.Range, 2, Draw.Color(255, 255, 0, 255))
     end
     if self.Menu.draws.edraws:Value() then
-        Draw.Circle(myHero, ERange, 2, Draw.Color(255, 0, 255, 255))
+        Draw.Circle(myHero, E.Range, 2, Draw.Color(255, 0, 255, 255))
     end
     if self.Menu.draws.rdraws:Value() then
-        Draw.Circle(myHero, RRange, 2, Draw.Color(255, 255, 255, 255))
+        Draw.Circle(myHero, R.Range, 2, Draw.Color(255, 255, 255, 255))
     end
 end
 
 function Lux:Tick()
     if _G.JustEvade and _G.JustEvade:Evading() or (_G.ExtLibEvade and _G.ExtLibEvade.Evading) or Game.IsChatOpen() or myHero.dead then return end
-    target = GetTarget(RRange)
+    target = GetTarget(AARange)
     if target and ValidTarget(target) then
         --PrintChat(target.pos:To2D())
         --PrintChat(mousePos:To2D())
@@ -1204,8 +1204,6 @@ end
 
 
 function Lux:Logic() 
-    if target == nil then return end
-    if _G.SDK.Cursor.Step ~= 0 then return end
     self:TurretShield()
     if Mode() == "Combo" then
         self:QCombo()
@@ -1216,9 +1214,6 @@ end
 
 function Lux:Auto()
     for i, enemy in pairs(EnemyHeroes) do
-        if _G.SDK.Cursor.Step ~= 0 then
-            return
-        end
         self:EReact(enemy)
         self:QKS(enemy)
         self:QInterrupt(enemy)
@@ -1260,8 +1255,8 @@ end
 -- [functions] --
 
 function Lux:QCombo()
-    local QComboTarget = GetTarget(QRange)
-    if ValidTarget(QComboTarget, QRange) and self:CanUse(_Q, "Combo") and self:SmoothChecks() then
+    local QComboTarget = GetTarget(Q.Range)
+    if ValidTarget(QComboTarget) and self:CanUse(_Q, "Combo") and self:SmoothChecks() then
         GGCast(HK_Q, QComboTarget, Q, self.Menu.combo.qcombohc:Value()+1)
     end
 end
@@ -1269,21 +1264,21 @@ end
 function Lux:WCombo(enemy)
     if self:CanUse(_W, "Combo") and myHero.health / myHero.maxHealth <= self.Menu.combo.wcombohp:Value() / 100 and enemy.activeSpell.valid and enemy.activeSpell.spellWasCast and self:SmoothChecks() then
         if enemy.activeSpell.target == myHero.handle then
-            GGCast(HK_W)
+            _G.Control.CastSpell(HK_W)
         else
             local placementPos = enemy.activeSpell.placementPos
             local width = myHero.boundingRadius + 50
             if enemy.activeSpell.width > 0 then width = width + enemy.activeSpell.width end
             local spellLine = ClosestPointOnLineSegment(myHero.pos, enemy.pos, placementPos)
             if GetDistance(myHero.pos, spellLine) <= width then
-                GGCast(HK_W)
+                _G.Control.CastSpell(HK_W)
             end
         end
     end
 end
 
 function Lux:WComboAlly(enemy, ally)
-    if ValidTarget(ally, WRange) and self:CanUse(_W, "Combo") and ally.health / ally.maxHealth <= self.Menu.combo.wcombohp:Value() / 100 and enemy.activeSpell.valid and enemy.activeSpell.spellWasCast and self:SmoothChecks() and self.Menu.combo.wcomboally[ally.charName]:Value() then
+    if ValidTarget(ally, W.Range) and self:CanUse(_W, "Combo") and ally.health / ally.maxHealth <= self.Menu.combo.wcombohp:Value() / 100 and enemy.activeSpell.valid and enemy.activeSpell.spellWasCast and self:SmoothChecks() and self.Menu.combo.wcomboally[ally.charName]:Value() then
         if enemy.activeSpell.target == ally.handle then
             GGCast(HK_W, ally, W)
         else
@@ -1300,7 +1295,7 @@ end
 
 
 function Lux:ECombo()
-    local EComboTarget = GetTarget(ERange)
+    local EComboTarget = GetTarget(E.Range)
     if EComboTarget ~= nil and self:CanUse(_E, "Combo") and myHero:GetSpellData(_E).toggleState == 0 and GetEnemyCount(240, EComboTarget) >= self.Menu.combo.ecombocount:Value() and self:SmoothChecks() then
         GGCast(HK_E, EComboTarget, E, self.Menu.combo.ecombohc:Value()+1)
     end
@@ -1314,7 +1309,7 @@ function Lux:EReact(enemy)
 end
 
 function Lux:RCombo()
-    local RComboTarget = GetTarget(RRange)
+    local RComboTarget = GetTarget(R.Range)
     if RComboTarget ~= nil and self:CanUse(_R, "Combo") and self:SmoothChecks() and IsImmobile(RComboTarget) >= 0.5 then
         if RComboTarget.pos:ToScreen().onScreen then
             GGCast(HK_R, RComboTarget, R)
@@ -1328,7 +1323,7 @@ function Lux:RCombo()
 end
 
 function Lux:RMassive(enemy)
-    if ValidTarget(enemy, RRange) and self:CanUse(_R, "Massiv") and self:SmoothChecks() then
+    if ValidTarget(enemy, R.Range) and self:CanUse(_R, "Massiv") and self:SmoothChecks() then
         local count = 0
         for j, enemy2 in pairs(EnemyHeroes) do 
             local RLine = ClosestPointOnLineSegment(enemy2.pos, myHero.pos, enemy.pos)
@@ -1364,7 +1359,7 @@ end
 
 
 function Lux:QKS(enemy)
-    if ValidTarget(enemy, QRange) and self:CanUse(_Q, "KS") and self:SmoothChecks() then
+    if ValidTarget(enemy, Q.Range) and self:CanUse(_Q, "KS") and self:SmoothChecks() then
         local QDam = getdmg("Q", enemy, myHero, myHero:GetSpellData(_Q).level)
        if enemy.health <= QDam then
             GGCast(HK_Q, enemy, Q)
@@ -1374,7 +1369,7 @@ end
 
 function Lux:QInterrupt(enemy)
     local Timer = Game.Timer()
-    if ValidTarget(enemy, QRange) and self:CanUse(_Q, "Interrupter") and self:SmoothChecks() and enemy.activeSpell.valid and enemy.activeSpell.castEndTime - Timer > 0.4 then
+    if ValidTarget(enemy, Q.Range) and self:CanUse(_Q, "Interrupter") and self:SmoothChecks() and enemy.activeSpell.valid and enemy.activeSpell.castEndTime - Timer > 0.4 then
         GGCast(HK_Q, enemy, Q)
     end
 end
@@ -1382,21 +1377,21 @@ end
 function Lux:WAuto(enemy)
     if self:CanUse(_W, "Auto") and myHero.health / myHero.maxHealth <= self.Menu.auto.wautohp:Value() / 100 and enemy.activeSpell.valid and enemy.activeSpell.spellWasCast and self:SmoothChecks() then
         if enemy.activeSpell.target == myHero.handle then
-            GGCast(HK_W)
+            _G.Control.CastSpell(HK_W)
         else
             local placementPos = enemy.activeSpell.placementPos
             local width = myHero.boundingRadius + 50
             if enemy.activeSpell.width > 0 then width = width + enemy.activeSpell.width end
             local spellLine = ClosestPointOnLineSegment(myHero.pos, enemy.pos, placementPos)
             if GetDistance(myHero.pos, spellLine) <= width then
-                GGCast(HK_W)
+                _G.Control.CastSpell(HK_W)
             end
         end
     end
 end
 
 function Lux:WAutoAlly(enemy, ally) 
-  if ValidTarget(ally, WRange) and self:CanUse(_W, "Auto") and ally.health / ally.maxHealth <= self.Menu.auto.wautohp:Value() / 100 and enemy.activeSpell.valid and enemy.activeSpell.spellWasCast and self:SmoothChecks() and self.Menu.auto.wautoally[ally.charName]:Value() then
+  if ValidTarget(ally, W.Range) and self:CanUse(_W, "Auto") and ally.health / ally.maxHealth <= self.Menu.auto.wautohp:Value() / 100 and enemy.activeSpell.valid and enemy.activeSpell.spellWasCast and self:SmoothChecks() and self.Menu.auto.wautoally[ally.charName]:Value() then
         if enemy.activeSpell.target == ally.handle then
             GGCast(HK_W, ally, W)
         else
@@ -1413,19 +1408,19 @@ end
 
 function Lux:TurretShield()
     if self:CanUse(_W, "Auto") and myHero.health / myHero.maxHealth <= self.Menu.auto.wautohp:Value() / 100 and self:SmoothChecks() and GetTurretShot(myHero) then
-        GGCast(HK_W, myHero)
+        _G.Control.CastSpell(HK_W)
     end
 end
 
 function Lux:TurretShieldAlly(ally)
-    if ValidTarget(ally, WRange) and self:CanUse(_W, "Auto") and ally.health / ally.maxHealth <= self.Menu.auto.wautohp:Value() / 100 and self:SmoothChecks() and GetTurretShot(ally) then
+    if ValidTarget(ally, W.Range) and self:CanUse(_W, "Auto") and ally.health / ally.maxHealth <= self.Menu.auto.wautohp:Value() / 100 and self:SmoothChecks() and GetTurretShot(ally) then
         GGCast(HK_W, ally, W)
     end
 end
 
 
 function Lux:EKS(enemy)
-    if ValidTarget(enemy, ERange) and self:CanUse(_E, "KS") and myHero:GetSpellData(_E).toggleState == 0 and self:SmoothChecks() then
+    if ValidTarget(enemy, E.Range) and self:CanUse(_E, "KS") and myHero:GetSpellData(_E).toggleState == 0 and self:SmoothChecks() then
         local EDam = getdmg("E", enemy, myHero, myHero:GetSpellData(_E).level)
         if enemy.health <= EDam then
             GGCast(HK_E, enemy, E)
@@ -1434,7 +1429,7 @@ function Lux:EKS(enemy)
 end
 
 function Lux:RKS(enemy)
-    if ValidTarget(enemy, RRange) and self:CanUse(_R, "KS") and self:SmoothChecks() then
+    if ValidTarget(enemy, R.Range) and self:CanUse(_R, "KS") and self:SmoothChecks() then
         local RDam = self:GetRDam(enemy)
         if enemy.health <= RDam then
             if enemy.pos:ToScreen().onScreen then
@@ -1450,7 +1445,7 @@ function Lux:RKS(enemy)
 end
 
 function Lux:ELaneClear(minion)
-    if ValidTarget(minion, ERange) and self:CanUse(_E, "LaneClear") and myHero:GetSpellData(_E).toggleState == 0 and self:SmoothChecks() and GetMinionCount(ERange, 200, minion) >= self.Menu.laneclear.elaneclearcount:Value() then
+    if ValidTarget(minion, E.Range) and self:CanUse(_E, "LaneClear") and myHero:GetSpellData(_E).toggleState == 0 and self:SmoothChecks() and GetMinionCount(ERange, 200, minion) >= self.Menu.laneclear.elaneclearcount:Value() then
         CustomCast(HK_E, minion)
     end
     if myHero:GetSpellData(_E).toggleState == 2 then
@@ -1459,7 +1454,7 @@ function Lux:ELaneClear(minion)
 end
 
 function Lux:RLaneClear(minion)
-    if ValidTarget(minion, QRange) and self:CanUse(_R, "LaneClear") and self:SmoothChecks() then
+    if ValidTarget(minion, Q.Range) and self:CanUse(_R, "LaneClear") and self:SmoothChecks() then
         local count = 0
         local minions2 = _G.SDK.ObjectManager:GetEnemyMinions(QRange)
         for i = 1, #minions2 do
@@ -1471,22 +1466,22 @@ function Lux:RLaneClear(minion)
         end
         RMinionCount = count
         if RMinionCount >= self.Menu.laneclear.rlaneclearcount:Value() then
-            CustomCast(HK_R, minion)
+            GGCast(HK_R, minion)
         end
     end
 end
 
 function Lux:QLastHit(minion)
-    if ValidTarget(minion, QRange) and self:CanUse(_Q, "LastHit") and self:SmoothChecks() and (minion.charName == "SRU_ChaosMinionSiege" or minion.charName == "SRU_OrderMinionSiege") then
+    if ValidTarget(minion, Q.Range) and self:CanUse(_Q, "LastHit") and self:SmoothChecks() and (minion.charName == "SRU_ChaosMinionSiege" or minion.charName == "SRU_OrderMinionSiege") then
         local QDam = getdmg("Q", minion, myHero, myHero:GetSpellData(_Q).level)
         if minion.health <= QDam then
-            CustomCast(HK_Q, minion)
+            GGCast(HK_Q, minion)
         end
     end
 end
 
 function Lux:ELastHit(minion)
-    if ValidTarget(minion, ERange) and self:CanUse(_E, "LastHit") and self:SmoothChecks() then
+    if ValidTarget(minion, E.Range) and self:CanUse(_E, "LastHit") and self:SmoothChecks() then
         local EDam = getdmg("E", minion, myHero, myHero:GetSpellData(_E).level)
         if minion.health <= EDam then
             local count = 0
@@ -1500,17 +1495,17 @@ function Lux:ELastHit(minion)
             end
             EMinionCount = count
             if EMinionCount >= self.Menu.lasthit.elasthitcount:Value() then
-                CustomCast(HK_E, minion)
+                GGCast(HK_E, minion)
             end
         end
     end
     if myHero:GetSpellData(_E).toggleState == 2 then
-        CustomCast(HK_E)
+        _G.Control.CastSpell(HK_E)
     end
 end
 
 function Lux:SemiR(enemy)
-    if ValidTarget(enemy, RRange) and self:CanUse(_R, "Semi") and self:SmoothChecks() and GetDistance(enemy.pos, mousePos) <= 400 then
+    if ValidTarget(enemy, R.Range) and self:CanUse(_R, "Semi") and self:SmoothChecks() and GetDistance(enemy.pos, mousePos) <= 400 then
         GGCast(HK_R, enemy, R)
     end
 end
