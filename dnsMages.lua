@@ -60,6 +60,29 @@ end
 
 local ItemHotKey = {[ITEM_1] = HK_ITEM_1, [ITEM_2] = HK_ITEM_2,[ITEM_3] = HK_ITEM_3, [ITEM_4] = HK_ITEM_4, [ITEM_5] = HK_ITEM_5, [ITEM_6] = HK_ITEM_6,}
 
+local InterruptSpells = {
+    ["Caitlyn"] = {"CaitlynAceintheHole"},
+    ["FiddleSticks"] = {"Crowstorm"},
+    ["FiddleSticks"] = {"DrainChannel"},
+    ["Galio"] = {"GalioIdolOfDurand"},
+    ["Janna"] = {"ReapTheWhirlwind"},
+    ["Karthus"] = {"KarthusFallenOne"},
+    ["Katarina"] = {"KatarinaR"},
+    ["Lucian"] = {"LucianR"},
+    ["Malzahar"] = {"AlZaharNetherGrasp"},
+    ["MasterYi"] = {"Meditate"},
+    ["MissFortune"] = {"MissFortuneBulletTime"},
+    ["Nunu"] = {"NunuR"},
+    ["Pantheon"] = {"PantheonRJump"},
+    ["Pantheon"] = {"PantheonRFall"},
+    ["Shen"] = {"ShenStandUnited"},
+    ["TwistedFate"] = {"Destiny"},
+    ["Urgot"] = {"UrgotSwap2"},
+    ["Velkoz"] = {"VelkozR"},
+    ["Warwick"] = {"WarwickR"},
+    ["Xerath"] = {"XerathLocusOfPower2"}
+}
+
 local function GetInventorySlotItem(itemID)
     assert(type(itemID) == "number", "GetInventorySlotItem: wrong argument types (<number> expected)")
     for _, j in pairs({ITEM_1, ITEM_2, ITEM_3, ITEM_4, ITEM_5, ITEM_6}) do
@@ -451,7 +474,6 @@ local function ValidTarget(unit, range)
 end
 
 local function GetEnemyCount(range, pos)
-    local pos = pos.pos
     local count = 0
     for i, hero in pairs(EnemyHeroes) do
     local Range = range * range
@@ -462,8 +484,18 @@ local function GetEnemyCount(range, pos)
     return count
 end
 
+local function GetEnemyCountLinear(range, pos)
+    local count = 0
+    for i, enemy in pairs(EnemyHeroes) do
+        local enemyLine = ClosestPointOnLineSegment(enemy.pos, pos, myHero.pos)
+        if GetDistance(enemy.pos, enemyLine) <= range and ValidTarget(enemy) then
+            count = count + 1
+        end
+    end
+    return count
+end
+ 
 local function GetAllyCount(range, pos)
-    local pos = pos.pos
     local count = 0
     for i, hero in pairs(AllyHeroes) do
     local Range = range * range
@@ -476,12 +508,24 @@ end
 
 local function GetMinionCount(checkrange, range, pos)
     local minions = _G.SDK.ObjectManager:GetEnemyMinions(checkrange)
-    local pos = pos.pos
     local count = 0
     for i = 1, #minions do 
         local minion = minions[i]
         local Range = range * range
         if GetDistanceSqr(pos, minion.pos) < Range and IsValid(minion) then
+            count = count + 1
+        end
+    end
+    return count
+end
+
+local function GetMinionCountLinear(checkrange, range, pos)
+    local minions = _G.SDK.ObjectManager:GetEnemyMinions(checkrange)
+    local count = 0 
+    for i = 1, #minions do
+        local minion = minions[i]
+        local spellLine = ClosestPointOnLineSegment(minion.pos, myHero.pos, pos)
+        if GetDistance(minion.pos, spellLine) <= range and ValidTarget(minion) then
             count = count + 1
         end
     end
@@ -521,12 +565,66 @@ function GetTurretShot(unit)
     end
 end
 
-local function CustomCastMM(spell,pos)
-    local MMSpot = Vector(pos):ToMM()
-    local MouseSpotBefore = mousePos
-    Control.SetCursorPos(MMSpot.x, MMSpot.y)
-    Control.KeyDown(spell); Control.KeyUp(spell)
-    DelayAction(function() Control.SetCursorPos(MouseSpotBefore) end, 0.20)
+local function CastSpellMM(spell,pos,range,delay)
+local castSpell = {state = 0, tick = GetTickCount(), casting = GetTickCount() - 1000, mouse = mousePos}
+local range = range or math.huge
+local delay = delay or 250
+local ticker = GetTickCount()
+    if castSpell.state == 0 and GetDistance(myHero.pos,pos) < range and ticker - castSpell.casting > delay + Game.Latency() then
+        castSpell.state = 1
+        castSpell.mouse = mousePos
+        castSpell.tick = ticker
+    end
+    if castSpell.state == 1 then
+        if ticker - castSpell.tick < Game.Latency() then
+            local castPosMM = pos:ToMM()
+            Control.SetCursorPos(castPosMM.x,castPosMM.y)
+            Control.KeyDown(spell)
+            Control.KeyUp(spell)
+            castSpell.casting = ticker + delay
+            DelayAction(function()
+                if castSpell.state == 1 then
+                    Control.SetCursorPos(castSpell.mouse)
+                    castSpell.state = 0
+                end
+            end,Game.Latency()/1000)
+        end
+        if ticker - castSpell.casting > Game.Latency() then
+            Control.SetCursorPos(castSpell.mouse)
+            castSpell.state = 0
+        end
+    end
+end
+
+local function CastSpellMM(spell,pos,range,delay)
+local castSpell = {state = 0, tick = GetTickCount(), casting = GetTickCount() - 1000, mouse = mousePos}
+local range = range or math.huge
+local delay = delay or 250
+local ticker = GetTickCount()
+    if castSpell.state == 0 and GetDistance(myHero.pos,pos) < range and ticker - castSpell.casting > delay + Game.Latency() then
+        castSpell.state = 1
+        castSpell.mouse = mousePos
+        castSpell.tick = ticker
+    end
+    if castSpell.state == 1 then
+        if ticker - castSpell.tick < Game.Latency() then
+            local castPosMM = pos:ToMM()
+            Control.SetCursorPos(castPosMM.x,castPosMM.y)
+            Control.KeyDown(spell)
+            Control.KeyUp(spell)
+            castSpell.casting = ticker + delay
+            DelayAction(function()
+                if castSpell.state == 1 then
+                    Control.SetCursorPos(castSpell.mouse)
+                    castSpell.state = 0
+                end
+            end,Game.Latency()/1000)
+        end
+        if ticker - castSpell.casting > Game.Latency() then
+            Control.SetCursorPos(castSpell.mouse)
+            castSpell.state = 0
+        end
+    end
 end
 
 local function HitChanceConvert(menVal)
@@ -543,29 +641,51 @@ local function HitChanceConvert(menVal)
     end
 end
 
-function GGCast(spell, target, spellprediction, hitchance)
-        if not (target or spellprediction) then
-            return false
-        end
-        if spellprediction == nil then
-            if target == nil then
-                Control.KeyDown(spell)
-                Control.KeyUp(spell)
-                return true
+function dnsCast(spell, pos, prediction, hitchance)
+    local hitchance = hitchance or 0.1
+    if pos == nil and prediction == nil then
+        Control.KeyDown(spell)
+        Control.KeyUp(spell)
+        lastSpell = GetTickCount()
+    elseif prediction == nil then
+        _G.Control.CastSpell(spell, pos)
+    else
+        if prediction.type == "circular" then
+            local pred = _G.PremiumPrediction:GetPrediction(myHero, pos, prediction)
+            if pred.CastPos and pred.HitChance >= hitchance and GetDistance(pred.CastPos, myHero.pos) <= prediction.range then
+                if pred.CastPos:ToScreen().onScreen then
+                    _G.Control.CastSpell(spell, pred.CastPos)
+                    lastSpell = GetTickCount()
+                else
+                    CastSpellMM(spell, pred.CastPos)
+                    lastSpell = GetTickCount()
+                end
             end
-            _G.Control.CastSpell(spell, target)
-            return true
+        elseif prediction.type == "linear" then
+            local pred = _G.PremiumPrediction:GetPrediction(myHero, pos, prediction)
+            if pred.CastPos and pred.HitChance >= hitchance and GetDistance(pred.CastPos, myHero.pos) <= prediction.range then
+                if pred.CastPos:ToScreen().onScreen then
+                    _G.Control.CastSpell(spell, pred.CastPos)
+                    lastSpell = GetTickCount()
+                else
+                    local CastSpot = myHero.pos:Extended(pred.CastPos, 800)
+                    _G.Control.CastSpell(spell, CastSpot)
+                    lastSpell = GetTickCount()
+                end
+            end
+        elseif prediction.type == "conic" then
+            local pred = _G.PremiumPrediction:GetPrediction(myHero, pos, prediction)
+            if pred.CastPos and pred.HitChance >= hitchance and GetDistance(pred.CastPos, myHero.pos) <= prediction.range then
+                if pred.CastPos:ToScreen().onScreen then
+                    _G.Control.CastSpell(spell, pred.CastPos)
+                    lastSpell = GetTickCount()
+                else
+                    return
+                end
+            end
         end
-        if target == nil then
-            return false
-        end
-        spellprediction:GetPrediction(target, myHero)
-        if spellprediction:CanHit(hitchance or HITCHANCE_HIGH) and GetDistance(spellprediction.CastPosition, myHero.pos) < spellprediction.Range and GetDistance(spellprediction.CastPosition, target.pos) < 250 then
-            _G.Control.CastSpell(spell, spellprediction.CastPosition)
-            return true
-        end
-        return false
     end
+end
 
 class "Manager"
 
@@ -578,6 +698,9 @@ function Manager:__init()
     end
     if myHero.charName == "Irelia" then
         DelayAction(function() self:LoadIrelia() end, 1.05)
+    end
+    if myHero.charName == "Xerath" then
+        DelayAction(function() self:LoadXerath() end, 1.05)
     end
 end
 
@@ -595,24 +718,18 @@ function Manager:LoadLux()
     Callback.Add("Draw", function() Lux:Draws() end)
 end
 
-function Manager:LoadIrelia()
-    Irelia:Spells()
-    Irelia:Menu()
-    Callback.Add("Tick", function() Irelia:Tick() end)
-    Callback.Add("Draw", function() Irelia:Draws() end)
+function Manager:LoadXerath()
+    Xerath:Spells()
+    Xerath:Menu()
+    Callback.Add("Tick", function() Xerath:Tick() end)
+    Callback.Add("Draw", function() Xerath:Draws() end)
 end
+
 
 
 class "Brand"
 
 local EnemyLoaded = false
-local Timer = Game.Timer()
-local ComboTimer = nil
-local AARange = 550
-local QRange = 1000
-local WRange = 850
-local ERange = 615
-local RRange = 740
 local PassiveBuff = "BrandAblaze"
 local BrandIcon = "https://www.proguides.com/public/media/rlocal/champion/thumbnail/63.png"
 local BrandQIcon = "https://www.proguides.com/public/media/rlocal/champion/ability/thumbnail/BrandQ.png"
@@ -626,9 +743,9 @@ function Brand:Menu()
     -- Combo
     self.Menu:MenuElement({id = "Combo", name = "Combo", type = MENU})
     self.Menu.Combo:MenuElement({id = "qcombo", name = "Use [Q] in Combo", value = true, leftIcon = BrandQIcon})
-    self.Menu.Combo:MenuElement({id = "qcombohc", name = "[Q] HitChance >=", value = 2, drop = {"Normal", "High", "Immobile"}, leftIcon = BrandQIcon})
+    self.Menu.Combo:MenuElement({id = "qcombohc", name = "[Q] HitChance >=", value = 0.15, min = 0, max = 1, step = 0.05, leftIcon = BrandQIcon})
     self.Menu.Combo:MenuElement({id = "wcombo", name = "Use [W] in Combo", value = true, leftIcon = BrandWIcon})
-    self.Menu.Combo:MenuElement({id = "wcombohc", name = "[W] HitChance >=", value = 2, drop = {"Normal","High", "Immobile"}, leftIcon = BrandWIcon})
+    self.Menu.Combo:MenuElement({id = "wcombohc", name = "[W] HitChance >=", value = 0.15, min = 0, max = 1, step = 0.05, leftIcon = BrandWIcon})
     self.Menu.Combo:MenuElement({id = "ecombo", name = "Use [E] in Combo", value = true, leftIcon = BrandEIcon})
     self.Menu.Combo:MenuElement({id = "rcombo", name = "Use [R] in Combo", value = true, leftIcon = BrandRIcon})
     self.Menu.Combo:MenuElement({id = "rcombocount", name = "[R] HitCount >=", value = 3, min = 1, max = 5, step = 1, leftIcon = BrandRIcon})
@@ -665,11 +782,10 @@ function Brand:Menu()
 end
 
 function Brand:Spells()
-    QSpell = {speed = 1200, delay = 0.25, radius = 60, range = 1000, collision = {"minion"}, type = "linear"}
-    WSpell = {speed = math.huge, delay = 0.877, radius = 60, range = 850, collision = {}, type = "circular"}
-
-    Q = GGPrediction:SpellPrediction({Type = GGPrediction.SPELLTYPE_LINE, Speed = 1200, Range = 1000, Delay = 0.25, Radius = 30, Collision = true, CollisionTypes = {GGPrediction.COLLISION_MINION}})
-    WPrediction = GGPrediction:SpellPrediction({Type = GGPrediction.SPELLTYPE_CIRCLE, Speed = math.huge, Range = 850, Delay = 0.877, Radius = 50, Collision = false})
+    Q = {speed = 1200, delay = 0.25, radius = 30, range = 1040, collision = {"minion"}, type = "linear"}
+    W = {speed = math.huge, delay = 0.877, radius = 50, range = 900, collision = {}, type = "circular"}
+    E = {range = 675, delay = 0.25}
+    R = {range = 750, delay = 0.25}
 end
 
 function Brand:Draws()
@@ -689,7 +805,7 @@ end
 
 function Brand:Tick()
     if _G.JustEvade and _G.JustEvade:Evading() or (_G.ExtLibEvade and _G.ExtLibEvade.Evading) or Game.IsChatOpen() or myHero.dead then return end
-    target = GetTarget(AARange)
+    target = GetTarget(myHero.range + myHero.boundingRadius)
     if target and ValidTarget(target) then
         --PrintChat(target.pos:To2D())
         --PrintChat(mousePos:To2D())
@@ -728,7 +844,7 @@ function Brand:CastingChecks()
 end
 
 function Brand:SmoothChecks()
-    if self:CastingChecks() and _G.SDK.Cursor.Step == 0 and _G.SDK.Spell:CanTakeAction({q = 0.33, w = 0.33, e = 0.33, r = 0.33}) then
+    if self:CastingChecks() and _G.SDK.Cursor.Step == 0 and _G.SDK.Spell:CanTakeAction({q = 0.35, w = 0.35, e = 0.35, r = 0.35}) and not _G.SDK.Orbwalker:IsAutoAttacking() then
         return true
     else
         return false
@@ -803,7 +919,7 @@ function Brand:Auto()
 end
 
 function Brand:Minions()
-    local minions = _G.SDK.ObjectManager:GetEnemyMinions(WRange)
+    local minions = _G.SDK.ObjectManager:GetEnemyMinions(W.range)
     for i = 1, #minions do
         local minion = minions[i]
         if Mode() == "LaneClear" then
@@ -818,77 +934,81 @@ end
 -- [functions] -- 
 
 function Brand:QCombo(enemy)
-    if ValidTarget(enemy, QRange) and self:CanUse(_Q, "Combo") and BuffActive(enemy, PassiveBuff) and self:SmoothChecks() then
-        GGCast(HK_Q, enemy, Q, self.Menu.Combo.qcombohc:Value()+1)
+    if ValidTarget(enemy, Q.range) and self:CanUse(_Q, "Combo") and BuffActive(enemy, PassiveBuff) and self:SmoothChecks() then
+        dnsCast(HK_Q, enemy, Q, self.Menu.Combo.qcombohc:Value())
     end
 end
 
 function Brand:WCombo()
-    local WTarget = GetTarget(WRange)
-    if ValidTarget(WTarget, WRange) and self:CanUse(_W, "Combo") and self:SmoothChecks() then
-        GGCast(HK_W, WTarget, WPrediction, self.Menu.Combo.wcombohc:Value()+1)
+    local wtarget = GetTarget(W.range)
+    if ValidTarget(wtarget) and self:CanUse(_W, "Combo") and self:SmoothChecks() then
+        dnsCast(HK_W, wtarget, W, self.Menu.Combo.wcombohc:Value())
     end
 end
 
 function Brand:ECombo()
-    local ETarget = GetTarget(ERange)
-    if ValidTarget(target, ERange) and self:CanUse(_E, "Combo") and self:SmoothChecks() then
-        Control.CastSpell(HK_E, target)
+    local etarget = GetTarget(E.range)
+    if ValidTarget(etarget) and self:CanUse(_E, "Combo") and self:SmoothChecks() then
+        dnsCast(HK_E, etarget)
     end
 end
 
 function Brand:RCombo(enemy)
-    if ValidTarget(enemy, RRange) and self:CanUse(_R, "Combo") and GetEnemyCount(550, enemy) >= self.Menu.Combo.rcombocount:Value() and self:SmoothChecks() then
-        Control.CastSpell(HK_R, enemy)
+    if ValidTarget(enemy, R.range) and self:CanUse(_R, "Combo") and GetEnemyCount(550, enemy.pos) >= self.Menu.Combo.rcombocount:Value() and self:SmoothChecks() then
+        dnsCast(HK_R, enemy)
     end
 end
 
 function Brand:QKS(enemy)
-    if ValidTarget(enemy, QRange) and self:CanUse(_Q, "KS") and enemy.health / enemy.maxHealth <= 0.5 and self:SmoothChecks() then
+    if ValidTarget(enemy, Q.range) and self:CanUse(_Q, "KS") and self:SmoothChecks() then
         local QDam = getdmg("Q", enemy, myHero, myHero:GetSpellData(_Q).level)
         if enemy.health <= QDam then
-            GGCast(HK_Q, enemy, Q)
+            dnsCast(HK_Q, enemy, Q)
         end
     end
 end
 
 function Brand:WKS(enemy)
-    if ValidTarget(enemy, WRange) and self:CanUse(_W, "KS") and enemy.health / enemy.maxHealth <= 0.5 and self:SmoothChecks() then
+    if ValidTarget(enemy, W.range) and self:CanUse(_W, "KS") and self:SmoothChecks() then
         local WDam = getdmg("W", enemy, myHero, myHero:GetSpellData(_W).level)
         if enemy.health <= WDam then
-            GGCast(HK_W, enemy, WPrediction)
+            dnsCast(HK_W, enemy, W)
         end
     end
 end
 
 function Brand:EKS(enemy)
-    if ValidTarget(enemy, ERange) and self:CanUse(_E, "KS") and enemy.health / enemy.maxHealth <= 0.5 then
+    if ValidTarget(enemy, E.range) and self:CanUse(_E, "KS") then
         local EDam = getdmg("E", enemy, myHero, myHero:GetSpellData(_E).level)
         if enemy.health <= EDam and self:SmoothChecks() then
-            Control.CastSpell(HK_E, enemy)
+            dnsCast(HK_E, enemy)
         end
     end
 end
 
 function Brand:DyingR(enemy)
-    if ValidTarget(enemy, RRange) and self:CanUse(_R, "Dying") and myHero.health / myHero.maxHealth <= 0.3 and enemy.activeSpell.valid and enemy.activeSpell.spellWasCast and self:SmoothChecks() then
+    if ValidTarget(enemy, R.range) and self:CanUse(_R, "Dying") and myHero.health / myHero.maxHealth <= 0.35 and enemy.activeSpell.valid and enemy.activeSpell.spellWasCast and self:SmoothChecks() then
         if enemy.activeSpell.target == myHero.handle then
-            Control.CastSpell(HK_R, enemy)
+            dnsCast(HK_R, enemy)
         else
             local placementPos = enemy.activeSpell.placementPos
             local width = myHero.boundingRadius + 50
+            local startPos = enemy.activeSpell.startPos
             if enemy.activeSpell.width > 0 then width = width + enemy.activeSpell.width end
-            local spellLine = ClosestPointOnLineSegment(myHero.pos, enemy.pos, placementPos)
+            local spellLine = ClosestPointOnLineSegment(myHero.pos, startPos, placementPos)
             if GetDistance(myHero.pos, spellLine) <= width then
-                Control.CastSpell(HK_R, enemy)
+                dnsCast(HK_R, enemy)
             end
         end
     end
 end
 
 function Brand:WLaneClear(minion)
-    if ValidTarget(minion, WRange) and self:CanUse(_W, "LaneClear") and self:SmoothChecks() and GetMinionCount(WRange, 200, minion) >= self.Menu.laneclear.wlaneclearcount:Value() then
-        CustomCast(HK_W, minion)
+    if ValidTarget(minion, W.range) and self:CanUse(_W, "LaneClear") and self:SmoothChecks() then
+        local pred = _G.PremiumPrediction:GetPrediction(myHero, minion, W)
+        if GetMinionCount(W.range, 240, pred.CastPos) >= self.Menu.LaneClear.wlaneclearcount:Value() and pred.HitChance >= 0.05 then
+            dnsCast(HK_W, pred.CastPos)
+        end
     end
 end
 
@@ -905,7 +1025,8 @@ function Brand:AABlock()
 end
 
 function Brand:MoveHelper(unit)
-    local EAARangel = _G.SDK.Data:GetAutoAttackRange(unit)
+    local EAARangel = unit.range + unit.boundingRadius
+    local AARange = myHero.range + myHero.boundingRadius
     local MoveSpot = nil
     local RangeDif = AARange - EAARangel
     local ExtraRangeDist = RangeDif
@@ -947,30 +1068,18 @@ function Brand:MoveHelper(unit)
     return GaleMouseSpoty
 end
 
-function OnLoad()
-    Manager()
-end
-
 class "Lux"
 
 local EnemyLoaded = false
 local AllyLoaded = false
-local Timer = Game.Timer()
-local ComboTimer = nil
 
 -- lux icons
-local HeroIcon = "https://www.proguides.com/public/media/rlocal/champion/splash/99.jpg"
+local HeroIcon = "https://static.u.gg/assets/lol/riot_static/11.10.1/img/champion/Lux.png"
 local QIcon = "https://www.proguides.com/public/media/rlocal/champion/ability/thumbnail/LuxLightBinding.png"
 local WIcon = "https://www.proguides.com/public/media/rlocal/champion/ability/thumbnail/LuxPrismaticWave.png"
 local EIcon = "https://www.proguides.com/public/media/rlocal/champion/ability/thumbnail/LuxLightStrikeKugel.png"
 local RIcon = "https://www.proguides.com/public/media/rlocal/champion/ability/thumbnail/LuxMaliceCannon.png"
 
--- ranges
-local AARange = 550
-local QRange = 1175
-local WRange = 1150
-local ERange = 1100
-local RRange = 3340
 
 -- buffs
 local LuxPassive = "LuxIlluminatingFraulein"
@@ -988,17 +1097,17 @@ function Lux:Menu()
     -- Combo
     self.Menu:MenuElement({id = "combo", name = "Combo", type = MENU})
     self.Menu.combo:MenuElement({id = "qcombo", name = "Use [Q] in Combo", value = true, leftIcon = QIcon})
-    self.Menu.combo:MenuElement({id = "qcombohc", name = "[Q] HitChance >=", value = 2, drop = {"Normal", "High", "Immobile"}, leftIcon = QIcon})
+    self.Menu.combo:MenuElement({id = "qcombohc1", name = "[Q] HitChance >", value = 0.15, min = 0, max = 1, step = 0.05, leftIcon = QIcon})
     self.Menu.combo:MenuElement({id = "wcombo", name = "Use [W] in Combo", value = true, leftIcon = WIcon})
     self.Menu.combo:MenuElement({id = "wcombohp", name = "[W] HP <=", value = 80, min = 5, max = 95, step = 5, identifier = "%", leftIcon = WIcon})
     self.Menu.combo:MenuElement({id = "wcomboally", name = "[W] Allies", type = MENU, leftIcon = WIcon})
     self.Menu.combo:MenuElement({id = "ecombo", name = "Use [E] in Combo", value = true, leftIcon = EIcon})
-    self.Menu.combo:MenuElement({id = "ecombohc", name = "[E] HitChance >=", value = 2, drop = {"Normal", "High", "Immobile"}, leftIcon = EIcon})
+    self.Menu.combo:MenuElement({id = "ecombohc1", name = "[E] HitChance >", value = 0.15, min = 0, max = 1, step = 0.05, leftIcon = EIcon})
     self.Menu.combo:MenuElement({id = "ecombocount", name = "[E] PokeCount >=", value = 1, min = 1, max = 5, step = 1, leftIcon = EIcon})
     self.Menu.combo:MenuElement({id = "rcombo", name = "Use [R] on immobile Target", value = true, leftIcon = RIcon})
     self.Menu.combo:MenuElement({id = "rmassiv", name = "[R] to Damage multiple Enemies", value = true, leftIcon = RIcon})
-    self.Menu.combo:MenuElement({id = "rmassivcount", name = "[R] HitCount >=", value = 3, min = 1, max = 5, step = 1, leftIcon = RIcon})
-    self.Menu.combo:MenuElement({id = "rmassivhc", name = "[R] HitChance", value = 2, drop = {"Normal", "High", "Immobile"}, leftIcon = RIcon})
+    self.Menu.combo:MenuElement({id = "rmassivcount", name = "[R] HitCount >", value = 3, min = 1, max = 5, step = 1, leftIcon = RIcon})
+    self.Menu.combo:MenuElement({id = "rmassivhc1", name = "[R] HitChance", value = 0.15, min = 0, max = 1, step = 0.05, leftIcon = RIcon})
     self.Menu.combo:MenuElement({id = "rsemi", name = "Semi [R]", key = string.byte("T"), toggle = false})
 
 
@@ -1052,16 +1161,10 @@ function Lux:ActiveMenu()
 end
 
 function Lux:Spells() 
-    QSpell = {speed = 1200, range = QRange, delay = 0.25, radius = 40, collision = {"minion"}, type = "linear"}
-    WSpell = {speed = 2400, range = WRange, delay = 0.25, radius = 110, collision = {}, type = "linear"}
-    ESpell = {speed = 1200, range = ERange, delay = 0.25, radius = 60, collision = {}, type = "circular"}
-    RSpell = {speed = math.huge, range = RRange, delay = 1, radius = 50, collision = {}, type = "linear"}
-
-    Q = GGPrediction:SpellPrediction({Type = GGPrediction.SPELLTYPE_LINE, Speed = 1200, Range = 1075, Radius = 30, Delay = 0.25, Collision = true, MaxCollision = 1, CollisionTypes = {GGPrediction.COLLISION_MINION}})
-    W = GGPrediction:SpellPrediction({Type = GGPrediction.SPELLTYPE_LINE, Speed = 2400, Range = 1150, Radius = 60, Delay = 0.25, Collision = false})
-    E = GGPrediction:SpellPrediction({Type = GGPrediction.SPELLTYPE_CIRCLE, Speed = 1200, Range = 1000, Radius = 50, Delay = 0.25, Collision = false})
-    R = GGPrediction:SpellPrediction({Type = GGPrediction.SPELLTYPE_LINE, Speed = math.huge, Range = 3340, Radius = 30, Delay = 1, Collision = false})
-
+    Q = {speed = 1200, range = 1240, delay = 0.25, radius = 30, collision = {"minion"}, type = "linear"}
+    W = {speed = 2400, range = 1175, delay = 0.25, radius = 50, collision = {}, type = "linear"}
+    E = {speed = 1200, range = 1100, delay = 0.25, radius = 50, collision = {}, type = "circular"}
+    R = {speed = math.huge, range = 3400, delay = 1, radius = 30, collision = {}, type = "linear"}
 end
 
 function Lux:Draws()
@@ -1081,7 +1184,7 @@ end
 
 function Lux:Tick()
     if _G.JustEvade and _G.JustEvade:Evading() or (_G.ExtLibEvade and _G.ExtLibEvade.Evading) or Game.IsChatOpen() or myHero.dead then return end
-    target = GetTarget(AARange)
+    target = GetTarget(myHero.range + myHero.boundingRadius)
     if target and ValidTarget(target) then
         --PrintChat(target.pos:To2D())
         --PrintChat(mousePos:To2D())
@@ -1126,7 +1229,7 @@ function Lux:Tick()
 end
 
 function Lux:SmoothChecks()
-    if self:CastingChecks() and not _G.SDK.Attack:IsActive() and _G.SDK.Cursor.Step == 0 and _G.SDK.Spell:CanTakeAction({q = 0.33, w = 0.33, e = 0.33, r = 1.13}) then
+    if self:CastingChecks() and not _G.SDK.Orbwalker:IsAutoAttacking() and _G.SDK.Cursor.Step == 0 and _G.SDK.Spell:CanTakeAction({q = 0.35, w = 0.35, e = 0.35, r = 1.15}) then
         return true
     else
         return false
@@ -1237,7 +1340,7 @@ function Lux:Auto()
 end
 
 function Lux:Minions()
-    local minions = _G.SDK.ObjectManager:GetEnemyMinions(QRange)
+    local minions = _G.SDK.ObjectManager:GetEnemyMinions(Q.range)
     for i = 1, #minions do
         local minion = minions[i]
 
@@ -1255,39 +1358,42 @@ end
 -- [functions] --
 
 function Lux:QCombo()
-    local QComboTarget = GetTarget(Q.Range)
-    if ValidTarget(QComboTarget) and self:CanUse(_Q, "Combo") and self:SmoothChecks() then
-        GGCast(HK_Q, QComboTarget, Q, self.Menu.combo.qcombohc:Value()+1)
+    local qtarget = GetTarget(Q.range)
+    if ValidTarget(qtarget) and self:CanUse(_Q, "Combo") and self:SmoothChecks() then
+        dnsCast(HK_Q, qtarget, Q, self.Menu.combo.qcombohc1:Value())
     end
 end
 
 function Lux:WCombo(enemy)
-    if self:CanUse(_W, "Combo") and myHero.health / myHero.maxHealth <= self.Menu.combo.wcombohp:Value() / 100 and enemy.activeSpell.valid and enemy.activeSpell.spellWasCast and self:SmoothChecks() then
+    if self:CanUse(_W, "Combo") and myHero.health / myHero.maxHealth <= self.Menu.combo.wcombohp:Value() / 100 and enemy.activeSpell.valid and not enemy.activeSpell.isStopped and self:SmoothChecks() then
         if enemy.activeSpell.target == myHero.handle then
-            _G.Control.CastSpell(HK_W)
+            dnsCast(HK_W)
         else
             local placementPos = enemy.activeSpell.placementPos
+            local startPos = enemy.activeSpell.startPos
             local width = myHero.boundingRadius + 50
             if enemy.activeSpell.width > 0 then width = width + enemy.activeSpell.width end
-            local spellLine = ClosestPointOnLineSegment(myHero.pos, enemy.pos, placementPos)
+            local spellLine = ClosestPointOnLineSegment(myHero.pos, startPos, placementPos)
             if GetDistance(myHero.pos, spellLine) <= width then
-                _G.Control.CastSpell(HK_W)
+                dnsCast(HK_W)
             end
         end
     end
 end
 
 function Lux:WComboAlly(enemy, ally)
-    if ValidTarget(ally, W.Range) and self:CanUse(_W, "Combo") and ally.health / ally.maxHealth <= self.Menu.combo.wcombohp:Value() / 100 and enemy.activeSpell.valid and enemy.activeSpell.spellWasCast and self:SmoothChecks() and self.Menu.combo.wcomboally[ally.charName]:Value() then
+    if ValidTarget(ally, W.range) and self:CanUse(_W, "Combo") and ally.health / ally.maxHealth <= self.Menu.combo.wcombohp:Value() / 100 and enemy.activeSpell.valid and not enemy.activeSpell.isStopped and self:SmoothChecks() and self.Menu.combo.wcomboally[ally.charName]:Value() then
         if enemy.activeSpell.target == ally.handle then
             GGCast(HK_W, ally, W)
+            dnsCast(HK_W, ally, W, 0.05)
         else
             local placementPos = enemy.activeSpell.placementPos
+            local startPos = enemy.activeSpell.startPos
             local width = ally.boundingRadius + 50
             if enemy.activeSpell.width > 0 then width = width + enemy.activeSpell.width end
-            local spellLine = ClosestPointOnLineSegment(ally.pos, enemy.pos, placementPos)
+            local spellLine = ClosestPointOnLineSegment(ally.pos, startPos, placementPos)
             if GetDistance(ally.pos, spellLine) <= width then
-                GGCast(HK_W, ally, W)
+                dnsCast(HK_W, ally, W, 0.05)
             end
         end
     end
@@ -1295,52 +1401,41 @@ end
 
 
 function Lux:ECombo()
-    local EComboTarget = GetTarget(E.Range)
-    if EComboTarget ~= nil and self:CanUse(_E, "Combo") and myHero:GetSpellData(_E).toggleState == 0 and GetEnemyCount(240, EComboTarget) >= self.Menu.combo.ecombocount:Value() and self:SmoothChecks() then
-        GGCast(HK_E, EComboTarget, E, self.Menu.combo.ecombohc:Value()+1)
+    local etarget = GetTarget(E.range)
+    if ValidTarget(etarget) and self:CanUse(_E, "Combo") and myHero:GetSpellData(_E).toggleState == 0 and self:SmoothChecks() then
+        local pred = _G.PremiumPrediction:GetPrediction(myHero, etarget, E)
+        if GetEnemyCount(240, pred.CastPos) >= self.Menu.combo.ecombocount:Value() and pred.HitChance >= self.Menu.combo.ecombohc1:Value() then
+            if pred.CastPos:ToScreen().onScreen then
+                dnsCast(HK_E, pred.CastPos)
+            else
+                CastSpellMM(HK_E, pred.CastPos)
+            end
+        end
     end
 end
 
 function Lux:EReact(enemy)
     if IsValid(enemy) and self:CanUse(_E, "Combo") and myHero:GetSpellData(_E).toggleState == 2 then
-        Control.KeyDown(HK_E)
-        Control.KeyUp(HK_E)
+        dnsCast(HK_E)
     end
 end
 
 function Lux:RCombo()
-    local RComboTarget = GetTarget(R.Range)
-    if RComboTarget ~= nil and self:CanUse(_R, "Combo") and self:SmoothChecks() and IsImmobile(RComboTarget) >= 0.5 then
-        if RComboTarget.pos:ToScreen().onScreen then
-            GGCast(HK_R, RComboTarget, R)
-        else
-            R:GetPrediction(RComboTarget, myHero)
-            local Direction = Vector((myHero.pos-W.CastPosition):Normalized())
-            local CastSpot = myHero.pos - Direction * 800
-            GGCast(HK_R, CastSpot)
-        end
+    local rtarget = GetTarget(R.range)
+    if ValidTarget(rtarget) and self:CanUse(_R, "Combo") and self:SmoothChecks() and IsImmobile(rtarget) >= 0.5 then
+        dnsCast(HK_R, rtarget, R, 1)
     end
 end
 
 function Lux:RMassive(enemy)
-    if ValidTarget(enemy, R.Range) and self:CanUse(_R, "Massiv") and self:SmoothChecks() then
-        local count = 0
-        for j, enemy2 in pairs(EnemyHeroes) do 
-            local RLine = ClosestPointOnLineSegment(enemy2.pos, myHero.pos, enemy.pos)
-            if GetDistance(enemy2.pos, RLine) <= 120 then
-                count = count + 1
-            end
-        end
-        RCount = count
-        --PrintChat(RCount)
-        if RCount >= self.Menu.combo.rmassivcount:Value() then
-            if enemy.pos:ToScreen().onScreen then
-                GGCast(HK_R, enemy, R)
+    if ValidTarget(enemy, R.range) and self:CanUse(_R, "Massiv") and self:SmoothChecks() then
+        local pred = _G.PremiumPrediction:GetPrediction(myHero, enemy, R)
+        if GetEnemyCountLinear(100, pred.CastPos) and pred.HitChance >= self.Menu.combo.rmassivhc1:Value() then
+            if pred.CastPos:ToScreen().onScreen then
+                dnsCast(HK_R, pred.CastPos)
             else
-                R:GetPrediction(enemy, myHero)
-                local Direction = Vector((myHero.pos-R.CastPosition):Normalized())
-                local CastSpot = myHero.pos - Direction * 800
-                GGCast(HK_R, CastSpot)
+                local Vector = myHero.pos:Extended(pred.CastPos, 800)
+                dnsCast(HK_R, Vector)
             end
         end
     end
@@ -1359,48 +1454,57 @@ end
 
 
 function Lux:QKS(enemy)
-    if ValidTarget(enemy, Q.Range) and self:CanUse(_Q, "KS") and self:SmoothChecks() then
+    if ValidTarget(enemy, Q.range) and self:CanUse(_Q, "KS") and self:SmoothChecks() then
         local QDam = getdmg("Q", enemy, myHero, myHero:GetSpellData(_Q).level)
-       if enemy.health <= QDam then
-            GGCast(HK_Q, enemy, Q)
+        if enemy.health < QDam then
+            dnsCast(HK_Q, enemy, Q, 0.15)
         end
     end
 end
 
 function Lux:QInterrupt(enemy)
     local Timer = Game.Timer()
-    if ValidTarget(enemy, Q.Range) and self:CanUse(_Q, "Interrupter") and self:SmoothChecks() and enemy.activeSpell.valid and enemy.activeSpell.castEndTime - Timer > 0.4 then
-        GGCast(HK_Q, enemy, Q)
+    if ValidTarget(enemy, Q.range) and self:CanUse(_Q, "Interrupter") and self:SmoothChecks() and enemy.activeSpell.valid and not enemy.activeSpell.isStopped then
+        local t = InterruptSpells[enemy.charName]
+        if t then
+            for i = 1, #t do
+                if enemy.activeSpell.name == t[i] and enemy.activeSpell.castEndTime - Timer > 0.33 then
+                    dnsCast(HK_Q, enemy, Q, 0.75)
+                end
+            end
+        end
     end
 end
 
 function Lux:WAuto(enemy)
-    if self:CanUse(_W, "Auto") and myHero.health / myHero.maxHealth <= self.Menu.auto.wautohp:Value() / 100 and enemy.activeSpell.valid and enemy.activeSpell.spellWasCast and self:SmoothChecks() then
+    if self:CanUse(_W, "Auto") and myHero.health / myHero.maxHealth <= self.Menu.auto.wautohp:Value() / 100 and enemy.activeSpell.valid and not enemy.activeSpell.isStopped and self:SmoothChecks() then
         if enemy.activeSpell.target == myHero.handle then
-            _G.Control.CastSpell(HK_W)
+            dnsCast(HK_W)
         else
             local placementPos = enemy.activeSpell.placementPos
+            local startPos = enemy.activeSpell.startPos
             local width = myHero.boundingRadius + 50
             if enemy.activeSpell.width > 0 then width = width + enemy.activeSpell.width end
-            local spellLine = ClosestPointOnLineSegment(myHero.pos, enemy.pos, placementPos)
+            local spellLine = ClosestPointOnLineSegment(myHero.pos, startPos, placementPos)
             if GetDistance(myHero.pos, spellLine) <= width then
-                _G.Control.CastSpell(HK_W)
+                dnsCast(HK_W)
             end
         end
     end
 end
 
 function Lux:WAutoAlly(enemy, ally) 
-  if ValidTarget(ally, W.Range) and self:CanUse(_W, "Auto") and ally.health / ally.maxHealth <= self.Menu.auto.wautohp:Value() / 100 and enemy.activeSpell.valid and enemy.activeSpell.spellWasCast and self:SmoothChecks() and self.Menu.auto.wautoally[ally.charName]:Value() then
+  if ValidTarget(ally, W.range) and self:CanUse(_W, "Auto") and ally.health / ally.maxHealth <= self.Menu.auto.wautohp:Value() / 100 and enemy.activeSpell.valid and not enemy.activeSpell.isStopped and self:SmoothChecks() and self.Menu.auto.wautoally[ally.charName]:Value() then
         if enemy.activeSpell.target == ally.handle then
-            GGCast(HK_W, ally, W)
+            dnsCast(HK_W, ally, W, 0.05)
         else
             local placementPos = enemy.activeSpell.placementPos
+            local startPos = enemy.activeSpell.startPos
             local width = ally.boundingRadius + 50
             if enemy.activeSpell.width > 0 then width = width + enemy.activeSpell.width end
-            local spellLine = ClosestPointOnLineSegment(ally.pos, enemy.pos, placementPos)
+            local spellLine = ClosestPointOnLineSegment(ally.pos, startPos, placementPos)
             if GetDistance(ally.pos, spellLine) <= width then
-                GGCast(HK_W, ally, W)
+                dnsCast(HK_W, ally, W, 0.05)
             end
         end
     end
@@ -1408,65 +1512,52 @@ end
 
 function Lux:TurretShield()
     if self:CanUse(_W, "Auto") and myHero.health / myHero.maxHealth <= self.Menu.auto.wautohp:Value() / 100 and self:SmoothChecks() and GetTurretShot(myHero) then
-        _G.Control.CastSpell(HK_W)
+        dnsCast(HK_W)
     end
 end
 
 function Lux:TurretShieldAlly(ally)
-    if ValidTarget(ally, W.Range) and self:CanUse(_W, "Auto") and ally.health / ally.maxHealth <= self.Menu.auto.wautohp:Value() / 100 and self:SmoothChecks() and GetTurretShot(ally) then
-        GGCast(HK_W, ally, W)
+    if ValidTarget(ally, W.range) and self:CanUse(_W, "Auto") and ally.health / ally.maxHealth <= self.Menu.auto.wautohp:Value() / 100 and self:SmoothChecks() and GetTurretShot(ally) then
+        dnsCast(HK_W, ally, W, 0.05)
     end
 end
 
 
 function Lux:EKS(enemy)
-    if ValidTarget(enemy, E.Range) and self:CanUse(_E, "KS") and myHero:GetSpellData(_E).toggleState == 0 and self:SmoothChecks() then
+    if ValidTarget(enemy, E.range) and self:CanUse(_E, "KS") and myHero:GetSpellData(_E).toggleState == 0 and self:SmoothChecks() then
         local EDam = getdmg("E", enemy, myHero, myHero:GetSpellData(_E).level)
-        if enemy.health <= EDam then
-            GGCast(HK_E, enemy, E)
+        if enemy.health < EDam then
+            dnsCast(HK_E, enemy, E, 0.15)
         end
     end
 end
 
 function Lux:RKS(enemy)
-    if ValidTarget(enemy, R.Range) and self:CanUse(_R, "KS") and self:SmoothChecks() then
+    if ValidTarget(enemy, R.range) and self:CanUse(_R, "KS") and self:SmoothChecks() then
         local RDam = self:GetRDam(enemy)
-        if enemy.health <= RDam then
-            if enemy.pos:ToScreen().onScreen then
-                GGCast(HK_R, enemy, R)
-            else
-                R:GetPrediction(enemy, myHero)
-                local Direction = Vector((myHero.pos-R.CastPosition):Normalized())
-                local CastSpot = myHero.pos - Direction * 800
-                GGCast(HK_R, CastSpot)
-            end
+        if enemy.health < RDam then
+            dnsCast(HK_R, enemy, R, 0.15)
         end
     end
 end
 
 function Lux:ELaneClear(minion)
-    if ValidTarget(minion, E.Range) and self:CanUse(_E, "LaneClear") and myHero:GetSpellData(_E).toggleState == 0 and self:SmoothChecks() and GetMinionCount(ERange, 200, minion) >= self.Menu.laneclear.elaneclearcount:Value() then
-        GGCast(HK_E, minion)
+    if ValidTarget(minion, E.range) and self:CanUse(_E, "LaneClear") and myHero:GetSpellData(_E).toggleState == 0 and self:SmoothChecks() then
+        local pred = _G.PremiumPrediction:GetPrediction(myHero, minion, E)
+        if GetMinionCount(E.range, 240, pred.CastPos) >= self.Menu.laneclear.elaneclearcount:Value() and pred.HitChance >= 0.05 then
+            dnsCast(HK_E, pred.CastPos)
+        end
     end
     if myHero:GetSpellData(_E).toggleState == 2 then
-        Control.CastSpell(HK_E)
+        dnsCast(HK_E)
     end
 end
 
 function Lux:RLaneClear(minion)
-    if ValidTarget(minion, Q.Range) and self:CanUse(_R, "LaneClear") and self:SmoothChecks() then
-        local count = 0
-        local minions2 = _G.SDK.ObjectManager:GetEnemyMinions(QRange)
-        for i = 1, #minions2 do
-            local minion2 = minions2[i]
-            local RLine = ClosestPointOnLineSegment(minion2.pos, myHero.pos, minion.pos)
-            if GetDistance(minion2.pos, RLine) <= 120 then
-                count = count + 1
-            end
-        end
-        RMinionCount = count
-        if RMinionCount >= self.Menu.laneclear.rlaneclearcount:Value() then
-            GGCast(HK_R, minion)
+    if ValidTarget(minion, R.range) and self:CanUse(_R, "LaneClear") and self:SmoothChecks() then
+        local pred = _G.PremiumPrediction:GetPrediction(myHero, minion, R)
+        if GetMinionCountLinear(R.range, 100, pred.CastPos) and pred.HitChance >= 0.05 then
+            dnsCast(HK_R, pred.CastPos)
         end
     end
 end
@@ -1474,39 +1565,39 @@ end
 function Lux:QLastHit(minion)
     if ValidTarget(minion, Q.Range) and self:CanUse(_Q, "LastHit") and self:SmoothChecks() and (minion.charName == "SRU_ChaosMinionSiege" or minion.charName == "SRU_OrderMinionSiege") then
         local QDam = getdmg("Q", minion, myHero, myHero:GetSpellData(_Q).level)
-        if minion.health <= QDam then
-            GGCast(HK_Q, minion)
+        if minion.health < QDam then
+            dnsCast(HK_Q, minion, Q, 0.05)
         end
     end
 end
 
 function Lux:ELastHit(minion)
-    if ValidTarget(minion, E.Range) and self:CanUse(_E, "LastHit") and self:SmoothChecks() then
+    if ValidTarget(minion, E.range) and self:CanUse(_E, "LastHit") and self:SmoothChecks() then
         local EDam = getdmg("E", minion, myHero, myHero:GetSpellData(_E).level)
-        if minion.health <= EDam then
+        if minion.health < EDam then
             local count = 0
-            local minions2 = _G.SDK.ObjectManager:GetEnemyMinions(ERange)
+            local minions2 = _G.SDK.ObjectManager:GetEnemyMinions(E.range)
             for i = 1, #minions2 do
                 local minion2 = minions2[i]
                 local EDam2 = getdmg("E", minion2, myHero, myHero:GetSpellData(_E).level)
-                if minion2.health <= EDam2 and GetDistance(minion.pos, minion2.pos) <= 200 then
+                if minion2.health < EDam2 and GetDistance(minion.pos, minion2.pos) <= 240 then
                     count = count + 1
                 end
             end
             EMinionCount = count
             if EMinionCount >= self.Menu.lasthit.elasthitcount:Value() then
-                GGCast(HK_E, minion)
+                dnsCast(HK_E, minion)
             end
         end
     end
     if myHero:GetSpellData(_E).toggleState == 2 then
-        _G.Control.CastSpell(HK_E)
+        dnsCast(HK_E)
     end
 end
 
 function Lux:SemiR(enemy)
-    if ValidTarget(enemy, R.Range) and self:CanUse(_R, "Semi") and self:SmoothChecks() and GetDistance(enemy.pos, mousePos) <= 400 then
-        GGCast(HK_R, enemy, R)
+    if ValidTarget(enemy, R.range) and self:CanUse(_R, "Semi") and self:SmoothChecks() and GetDistance(enemy.pos, mousePos) <= 400 then
+        dnsCast(HK_R, enemy, R, 0.05)
     end
 end
 
@@ -1523,7 +1614,8 @@ function Lux:AABlock()
 end
 
 function Lux:MoveHelper(unit)
-    local EAARangel = _G.SDK.Data:GetAutoAttackRange(unit)
+    local EAARangel = unit.range + unit.boundingRadius
+    local AARange = myHero.range + myHero.boundingRadius
     local MoveSpot = nil
     local RangeDif = AARange - EAARangel
     local ExtraRangeDist = RangeDif
@@ -1565,7 +1657,508 @@ function Lux:MoveHelper(unit)
     return GaleMouseSpoty
 end
 
+class "Xerath"
+
+local EnemyLoaded = false
+local Timer = Game.Timer()
+local TickCount = GetTickCount()
+local AARange = 575
+local QRange = 735
+local ActiveQRange = 0
+local lastSpell = GetTickCount()
+local lastQ = Game.Timer()
+
+local Icon = "https://static.u.gg/assets/lol/riot_static/11.10.1/img/champion/Xerath.png"
+local QIcon = "https://static.u.gg/assets/lol/riot_static/11.10.1/img/spell/XerathArcanopulseChargeUp.png"
+local WIcon = "https://static.u.gg/assets/lol/riot_static/11.10.1/img/spell/XerathArcaneBarrage2.png"
+local EIcon = "https://static.u.gg/assets/lol/riot_static/11.10.1/img/spell/XerathMageSpear.png"
+local RIcon = "https://static.u.gg/assets/lol/riot_static/11.10.1/img/spell/XerathLocusOfPower2.png"
+
+
+function Xerath:Menu()
+    self.Menu = MenuElement({type = MENU, id = "xerath", name = "dnsXerath", leftIcon = Icon})
+
+    -- combo
+    self.Menu:MenuElement({id = "combo", name = "Combo", type = MENU})
+    self.Menu.combo:MenuElement({id = "qcombo", name = "Use [Q] in Combo", value = true, leftIcon = QIcon})
+    self.Menu.combo:MenuElement({id = "qcombohc", name = "[Q] HitChance", value = 0.15, min = 0, max = 1, step = 0.05, leftIcon = QIcon})
+    self.Menu.combo:MenuElement({id = "wcombo", name = "Use [W] in Combo", value = true, leftIcon = WIcon})
+    self.Menu.combo:MenuElement({id = "wcombohc", name = "[W] HitChance", value = 0.15, min = 0, max = 1, step = 0.05, leftIcon = WIcon})
+    self.Menu.combo:MenuElement({id = "ecombo", name = "Use [E] in Combo", value = true, leftIcon = EIcon})
+    self.Menu.combo:MenuElement({id = "ecombohc", name = "[E] HitChance", value = 0.15, min = 0, max = 1, step = 0.05, leftIcon = EIcon})
+    self.Menu.combo:MenuElement({id = "rcombo", name = "Use [R] in Combo", value = true, leftIcon = RIcon})
+    self.Menu.combo:MenuElement({id = "rmanual", name = "Start [R] manually", value = false, leftIcon = RIcon})
+    self.Menu.combo:MenuElement({id = "rcombohc", name = "[R] HitChance", value = 0.15, min = 0, max = 1, step = 0.05, leftIcon = RIcon})
+    self.Menu.combo:MenuElement({id = "rsemi", name = "Semi [R] nearest Mouse", key = string.byte("T"), toggle = false, leftIcon = RIcon})
+
+    -- Auto
+    self.Menu:MenuElement({id = "auto", name = "Auto", type = MENU})
+    self.Menu.auto:MenuElement({id = "qks", name = "Use [Q] KS", value = true, leftIcon = QIcon})
+    self.Menu.auto:MenuElement({id = "wks", name = "Use [W] KS", value = true, leftIcon = WIcon})
+    self.Menu.auto:MenuElement({id = "eks", name = "Use [E] KS", value = true, leftIcon = EIcon})
+    self.Menu.auto:MenuElement({id = "einterrupt", name = "Use [E] Interrupter", value = true, leftIcon = EIcon})
+    self.Menu.auto:MenuElement({id = "eimmo", name = "Use [E] on immobile/dashing Targets", value = true, leftIcon = EIcon})
+
+    self.Menu:MenuElement({id = "laneclear", name = "Farm", type = MENU})
+    self.Menu.laneclear:MenuElement({id = "qlaneclear", name = "Use [Q] in LaneClear", value = true, leftIcon = QIcon})
+    self.Menu.laneclear:MenuElement({id = "qlaneclearcount", name = "[Q] hit X minions", value = 3, min = 1, max = 9, step = 1, leftIcon = QIcon})
+    self.Menu.laneclear:MenuElement({id = "qlaneclearmana", name = "[Q] Mana", value = 40, min = 5, max = 95, step = 5, identifier = "%", leftIcon = QIcon})
+    self.Menu.laneclear:MenuElement({id = "wlaneclear", name = "Use [W] in LaneClear", value = true, leftIcon = WIcon})
+    self.Menu.laneclear:MenuElement({id = "wlaneclearcount", name = "[W] hit X minions", value = 3, min = 1, max = 9, step = 1, leftIcon = WIcon})
+    self.Menu.laneclear:MenuElement({id = "wlaneclearmana", name = "[W] Mana", value = 40, min = 5, max = 95, step = 5, identifier = "%", leftIcon = WIcon})
+    self.Menu.laneclear:MenuElement({id = "elasthit", name = "Use [E] to lasthit Cannon", value = true, leftIcon = EIcon})
+
+    self.Menu:MenuElement({id = "misc", name = "Misc", type = MENU})
+    self.Menu.misc:MenuElement({id = "movementhelper", name = "RangedHelper", value = false})
+    self.Menu.misc:MenuElement({id = "blockaa", name = "Block [AA] in Combo Mode", value = false})
+    self.Menu.misc:MenuElement({id = "blockaalvl", name = "Bloack [AA] after lvl", value = 9, min = 1, max = 18, step = 1})
+
+    -- draws 
+    self.Menu:MenuElement({id = "draws", name = "Draws", type = MENU})
+    self.Menu.draws:MenuElement({id = "qdraw", name = "Draw [Q] Range", value = false, leftIcon = QIcon})
+    self.Menu.draws:MenuElement({id = "wdraw", name = "Draw [W] Range", value = false, leftIcon = WIcon})
+    self.Menu.draws:MenuElement({id = "edraw", name = "Draw [E] Range", value = false, leftIcon = EIcon})
+    self.Menu.draws:MenuElement({id = "rdraw", name = "Draw [R] Range", value = false, leftIcon = RIcon})
+    self.Menu.draws:MenuElement({id = "rdrawmm", name = "Draw [R] Range on Minimap", value = true, leftIcon = RIcon})
+    self.Menu.draws:MenuElement({id = "rkill", name = "Draw [R] Killable on Enemy", value = true, leftIcon = RIcon})
+end
+
+
+function Xerath:Draws()
+    if self.Menu.draws.qdraw:Value() then
+        Draw.Circle(myHero, Q.range, 2, Draw.Color(255, 255, 0, 0))
+    end
+    if self.Menu.draws.wdraw:Value() then
+        Draw.Circle(myHero, W.range, 2, Draw.Color(255, 0, 255, 0))
+    end
+    if self.Menu.draws.edraw:Value() then
+        Draw.Circle(myHero, E.range, 2, Draw.Color(255, 0, 0, 255))
+    end
+    if self.Menu.draws.rdraw:Value() then
+        Draw.Circle(myHero, R.range, 2, Draw.Color(255, 255, 255, 0))
+    end
+    if self.Menu.draws.rdrawmm:Value() and IsReady(_R) then
+        Draw.CircleMinimap(myHero, R.range, 2, Draw.Color(255, 255, 0, 255))
+    end
+
+    if self.Menu.draws.rkill:Value() and IsReady(_R) then
+        for i, enemy in pairs(EnemyHeroes) do
+            if ValidTarget(enemy, R.Range) then
+                local RDam = getdmg("R", enemy, myHero, myHero:GetSpellData(_R).level)
+                if enemy.health < RDam and myHero:GetSpellData(_R).level > 0 then
+                    DrawTextOnHero(enemy, "1 RStack kills", Draw.Color(255, 255, 0, 0))
+                elseif enemy.health < RDam*2 and myHero:GetSpellData(_R).level > 0  then
+                    DrawTextOnHero(enemy, "2 RStack kills", Draw.Color(255, 255, 0, 0))
+                elseif enemy.health < RDam*3 and myHero:GetSpellData(_R).level > 0  then
+                    DrawTextOnHero(enemy, "3 RStack kills", Draw.Color(255, 255, 0, 0))
+                elseif enemy.health < RDam*4 and myHero:GetSpellData(_R).level > 1 then
+                    DrawTextOnHero(enemy, "4 RStack kills", Draw.Color(255, 255, 0, 0))
+                elseif enemy.health < RDam*5 and myHero:GetSpellData(_R).level > 2  then
+                    DrawTextOnHero(enemy, "5 RStack kills", Draw.Color(255, 255, 0, 0))
+                end
+            end
+        end
+    end
+end
+
+function Xerath:Spells()
+    Q = {delay = 0.528, radius = 30, range = 735, speed = math.huge, collision = {}, type = "linear"}
+    W = {delay = 0.778, radius = 50, range = 1000, speed = math.huge, collision = {}, type = "circular"}
+    E = {delay = 0.25, radius = 30, range = 1050, speed = 1400, collision = {"minion"}, type = "linear"}
+    R = {delay = 0.627, radius = 50, range = 5200, speed = math.huge, collision = {}, type = "circular"}
+end
+
+function Xerath:Tick()
+    if _G.JustEvade and _G.JustEvade:Evading() or (_G.ExtLibEvade and _G.ExtLibEvade.Evading) or Game.IsChatOpen() or myHero.dead then return end
+    target = GetTarget(myHero.range + myHero.boundingRadius)
+
+    if target and ValidTarget(target) then
+        GaleMouseSpot = self:MoveHelper(target)
+    else
+        _G.SDK.Orbwalker.ForceMovement = nil
+    end
+
+    if Control.IsKeyDown(HK_Q) and myHero:GetSpellData(_Q).currentCd > 1 then
+        Control.KeyUp(HK_Q)
+    end
+    CastingQ = myHero.activeSpell.name == "XerathArcanopulseChargeUp"
+    CastingW = myHero.activeSpell.name == "XerathArcaneBarrage2"
+    CastingE = myHero.activeSpell.name == "XerathMageSpear"
+    CastingR = myHero.activeSpell.name == "XerathLocusOfPower2"
+    if EnemyLoaded == false then
+        local CountEnemy = 0
+        for i, enemy in pairs(EnemyHeroes) do
+            CountEnemy = CountEnemy + 1
+        end
+        if CountEnemy < 1 then
+            GetEnemyHeroes()
+        else
+            EnemyLoaded = true
+            PrintChat("Enemy Loaded")
+        end
+    end
+    self:QLogic()
+    self:Logic()
+    self:Auto()
+    self:Minions()
+end
+
+function Xerath:CastingChecks()
+    if not CastingQ and not CastingW and not CastingE and not CastingR and _G.SDK.Cursor.Step == 0 and not _G.SDK.Orbwalker:IsAutoAttacking() and _G.SDK.Spell:CanTakeAction({q = 0.65, w = 0.35, e = 0.35, r = 0.75}) then
+        return true
+    else
+        return false
+    end
+end
+
+function Xerath:CanUse(spell, mode)
+    if mode == nil then
+        mode = Mode()
+    end
+
+    if spell == _Q then
+        if mode == "Combo" and IsReady(_Q) and self.Menu.combo.qcombo:Value() then
+            return true
+        end
+        if mode == "KS" and IsReady(_Q) and self.Menu.auto.qks:Value() then
+            return true
+        end
+        if mode == "LaneClear" and IsReady(spell) and self.Menu.laneclear.qlaneclear:Value() and myHero.mana / myHero.maxMana >= self.Menu.laneclear.qlaneclearmana:Value() / 100 then
+            return true
+        end
+    end
+    if spell == _W then
+        if mode == "Combo" and IsReady(_W) and self.Menu.combo.wcombo:Value() then
+            return true
+        end
+        if mode == "KS" and IsReady(_W) and self.Menu.auto.wks:Value() then
+            return true
+        end
+        if mode == "LaneClear" and IsReady(spell) and self.Menu.laneclear.wlaneclear:Value() and myHero.mana / myHero.maxMana >= self.Menu.laneclear.wlaneclearmana:Value() / 100 then
+            return true
+        end
+    end
+    if spell == _E then
+        if mode == "Combo" and IsReady(_E) and self.Menu.combo.ecombo:Value() then
+            return true
+        end
+        if mode == "KS" and IsReady(_E) and self.Menu.auto.eks:Value() then
+            return true
+        end
+        if mode == "Interrupter" and IsReady(_E) and self.Menu.auto.einterrupt:Value() then
+            return true
+        end
+        if mode == "Immobile" and IsReady(_E) and self.Menu.auto.eimmo:Value() then 
+            return true
+        end
+        if mode == "LastHit" and IsReady(spell) and self.Menu.laneclear.elasthit:Value() then
+            return true
+        end
+    end
+    if spell == _R then
+        if mode == "Combo" and IsReady(_R) and self.Menu.combo.rcombo:Value() then
+            return true
+        end
+        if mode == "Semi" and IsReady(_R) and self.Menu.combo.rsemi:Value() then
+            return true
+        end
+    end
+end
+
+function Xerath:Logic()
+    if Mode() == "Combo" then
+        self:QCombo()
+        self:WCombo()
+        self:ECombo()
+    end
+end
+
+function Xerath:Auto()
+    for i, enemy in pairs(EnemyHeroes) do
+        self:RLogic(enemy)
+        self:QKS(enemy)
+        self:WKS(enemy)
+        self:EKS(enemy)
+        self:EInterrupt(enemy)
+        self:EImmobile(enemy)
+        if Mode() == "Combo" then
+            self:RCombo(enemy)
+        end
+    end
+end
+
+function Xerath:Minions()
+    local minions = _G.SDK.ObjectManager:GetEnemyMinions(1500)
+    for i = 1, #minions do
+        local minion = minions[i]
+
+        if Mode() == "LaneClear" then
+            self:QLaneClear(minion)
+            self:WLaneClear(minion)
+            self:ELastHit(minion)
+        end
+
+
+        if Mode() == "LastHit" then
+            self:ELastHit(minion)
+        end
+
+    end
+end
+-- functions
+
+function Xerath:QBuffCheck()
+    if BuffActive(myHero, "XerathArcanopulseChargeUp") and Control.IsKeyDown(HK_Q) then
+        return true
+    else
+        return false
+    end
+end
+
+function Xerath:RBuffCheck()
+    if BuffActive(myHero, "XerathLocusOfPower2") then
+        return true
+    else
+        return false
+    end
+end
+
+function Xerath:QCombo()
+    local qtarget = GetTarget(1450)
+    if ValidTarget(qtarget) and self:CanUse(_Q, "Combo") and self:CastingChecks() and self:QBuffCheck() == false and self:RBuffCheck() == false then
+        Control.KeyDown(HK_Q)
+        lastQ = Game.Timer()
+    end
+end
+
+function Xerath:QLogic()
+    if BuffActive(myHero, "XerathArcanopulseChargeUp") then
+        _G.SDK.Orbwalker:SetAttack(false)
+        Q.range = 735 + (450 * (GetTickCount() - TickCount) / 1000)
+        if Q.range >= 1450 then
+            Q.range = 1450
+        end
+
+        if Mode() == "Combo" then
+            local qtarget = GetTarget(1450)
+            if ValidTarget(qtarget, Q.range) and self:CanUse(_Q, "Combo") and self:RBuffCheck() == false and lastQ + 0.15 < Game.Timer() then
+                dnsCast(HK_Q, qtarget, Q, self.Menu.combo.qcombohc:Value())
+            end
+        end
+
+        if Mode() == "LaneClear" then
+            local minions = _G.SDK.ObjectManager:GetEnemyMinions(Q.range) 
+            for i = 1, #minions do 
+                local minion = minions[i]
+                if ValidTarget(minion, Q.range) and self:CanUse(_Q, "LaneClear") and self:RBuffCheck() == false and lastQ + 0.15 < Game.Timer() then
+                    local pred = _G.PremiumPrediction:GetPrediction(myHero, minion, Q)
+                    if GetMinionCountLinear(Q.range, 140, pred.CastPos) and pred.HitChance >= 0.05 then
+                        dnsCast(HK_Q, pred.CastPos)
+                    end
+                end
+            end
+        end
+
+    else
+        _G.SDK.Orbwalker:SetAttack(true)
+        TickCount = GetTickCount()
+        Q.range = 735
+    end
+end
+
+function Xerath:WCombo()
+    local wtarget = GetTarget(W.range)
+    if ValidTarget(wtarget) and self:CanUse(_W, "Combo") and self:CastingChecks() and self:QBuffCheck() == false and self:RBuffCheck() == false then
+        dnsCast(HK_W, wtarget, W, self.Menu.combo.wcombohc:Value())
+    end
+end
+
+function Xerath:ECombo()
+    local etarget = GetTarget(E.range)
+    if ValidTarget(etarget) and self:CanUse(_E, "Combo") and self:CastingChecks() and self:QBuffCheck() == false and self:RBuffCheck() == false then
+        dnsCast(HK_E, etarget, E, self.Menu.combo.ecombohc:Value())
+    end
+end
+
+function Xerath:RCombo(enemy)
+    if GetDistance(myHero.pos, enemy.pos) <= 750 then
+        return
+    end
+    if self.Menu.combo.rmanual:Value() then
+        return 
+    end
+    local rstacks = 1
+    if myHero:GetSpellData(_R).level == 1 then rstacks = 3 end
+    if myHero:GetSpellData(_R).level == 2 then rstacks = 4 end
+    if myHero:GetSpellData(_R).level == 3 then rstacks = 5 end
+    local rtarget = GetTarget(R.Range)
+    if ValidTarget(rtarget, R.Range) and self:CanUse(_R, "Combo") and self:CastingChecks() and self:QBuffCheck() == false and self:RBuffCheck() == false then
+        local rdam = getdmg("R", rtarget, myHero, myHero:GetSpellData(_R).level)
+        if rtarget.health < (rdam * (rstacks-1)) then
+            dnsCast(HK_R)
+        end
+    end
+end
+
+
+function Xerath:RLogic(enemy)
+    if self:RBuffCheck() then
+        SetMovement(false)
+        if Mode() == "Combo" then
+            local rtarget = GetTarget(R.range)
+            if ValidTarget(rtarget) and self:CanUse(_R, "Combo") then
+                dnsCast(HK_R, enemy, R, self.Menu.combo.rcombohc:Value())
+            end
+        end
+        if ValidTarget(enemy, R.range) and self:CanUse(_R, "Semi") and GetDistance(mousePos, enemy.pos) <= 350 then
+            dnsCast(HK_R, enemy, R, self.Menu.combo.rcombohc:Value())
+        end
+    else
+        SetMovement(true)
+    end
+end
+
+function Xerath:QKS(enemy)
+    if ValidTarget(enemy, QRange) and self:CanUse(_Q, "KS") and self:CastingChecks() and self:QBuffCheck() == false and self:RBuffCheck() == false then
+        local qdam = getdmg("Q", enemy, myHero)
+        if qdam >= enemy.health then
+            dnsCast(HK_Q, enemy, Q)
+        end
+    end
+end
+
+function Xerath:WKS(enemy)
+    if ValidTarget(enemy, W.range) and self:CanUse(_W, "KS") and self:CastingChecks() and self:QBuffCheck() == false and self:RBuffCheck() == false then
+        local wdam = getdmg("W", enemy, myHero)
+        if wdam >= enemy.health then
+            dnsCast(HK_W, enemy, W)
+        end
+    end
+end
+
+function Xerath:EKS(enemy)
+    if ValidTarget(enemy, E.range) and self:CanUse(_E, "KS") and self:CastingChecks() and self:QBuffCheck() == false and self:RBuffCheck() == false then
+        local edam = getdmg("E", enemy, myHero)
+        if edam >= enemy.health then
+            dnsCast(HK_E, enemy, E)
+        end
+    end
+end
+
+function Xerath:EInterrupt(enemy)
+    local Timer = Game.Timer()
+    if ValidTarget(enemy, E.range) and self:CanUse(_E, "Interrupt") and self:CastingChecks() and enemy.activeSpell.valid and not enemy.activeSpell.isStopped and self:QBuffCheck() == false and self:RBuffCheck() == false and lastSpell + 250 < GetTickCount then
+        local t = InterruptSpells[enemy.charName]
+        if t then
+            for i = 1, #t do
+                if enemy.activeSpell.name == t[i] and enemy.activeSpell.startTime - Timer > 0.33 then
+                    dnsCast(HK_E, enemy, E, 0.75)
+                end
+            end
+        end
+    end
+end
+
+function Xerath:EImmobile(enemy)
+    if ValidTarget(enemy, E.range) and self:CanUse(_E, "Immobile") and self:CastingChecks() and self:QBuffCheck() == false and self:RBuffCheck() == false then
+        if IsImmobile(enemy) >= 0.5 then
+            dnsCast(HK_E, enemy, E, 1)
+        elseif enemy.pathing and enemy.pathing.isDashing then
+            if GetDistance(enemy.pathing.endPos, myHero.pos) < GetDistance(enemy.pos, myHero.pos) then
+                dnsCast(HK_E, enemy, E, 1)
+            end
+        end
+    end
+end
+
+function Xerath:QLaneClear(minion)
+    if ValidTarget(minion, 1450) and self:CanUse(_Q, "LaneClear") and self:CastingChecks() and self:QBuffCheck() == false and self:RBuffCheck() == false then
+        local pred = _G.PremiumPrediction:GetPrediction(myHero, minion, Q)
+        if GetMinionCountLinear(1450, 140, pred.CastPos) >= self.Menu.laneclear.qlaneclearcount:Value() and pred.HitChance >= 0.05 then
+            Control.KeyDown(HK_Q)
+            lastQ = Game.Timer()
+        end
+    end
+end
+
+function Xerath:WLaneClear(minion)
+    if ValidTarget(minion, W.range) and self:CanUse(_W, "LaneClear") and self:CastingChecks() and self:QBuffCheck() == false and self:RBuffCheck() == false then
+        local pred = _G.PremiumPrediction:GetPrediction(myHero, minion, W)
+        if GetMinionCount(W.range, 275, pred.CastPos) >= self.Menu.laneclear.wlaneclearcount:Value() and pred.HitChance >= 0.05 then
+            dnsCast(HK_W, pred.CastPos)
+        end
+    end
+end
+
+function Xerath:ELastHit(minion)
+    if ValidTarget(minion, E.range) and self:CanUse(_E, "LastHit") and self:CastingChecks() and self:QBuffCheck() == false and self:RBuffCheck() == false then
+        if (minion.charName == "SRU_ChaosMinionSiege" or minion.charName == "SRU_OrderMinionSiege") then
+            local EDam = getdmg("E", minion, myHero, myHero:GetSpellData(_E).level)
+            if minion.health < EDam then
+                dnsCast(HK_E, minion, E, 0.05)
+            end
+        end
+    end
+end
+
+function Xerath:MoveHelper(unit)
+    local EAARangel = unit.range + unit.boundingRadius
+    local AARange = myHero.range + myHero.boundingRadius
+    local MoveSpot = nil
+    local RangeDif = AARange - EAARangel
+    local ExtraRangeDist = RangeDif
+    local ExtraRangeChaseDist = RangeDif - 100
+
+    local ScanDirection = Vector((myHero.pos-mousePos):Normalized())
+    local ScanDistance = GetDistance(myHero.pos, unit.pos) * 0.8
+    local ScanSpot = myHero.pos - ScanDirection * ScanDistance
+    
+
+    local MouseDirection = Vector((unit.pos-ScanSpot):Normalized())
+    local MouseSpotDistance = EAARangel + ExtraRangeDist
+    if not IsFacing(unit) then
+        MouseSpotDistance = EAARangel + ExtraRangeChaseDist
+    end
+    if MouseSpotDistance > AARange then
+        MouseSpotDistance = AARange
+    end
+
+    local MouseSpot = unit.pos - MouseDirection * (MouseSpotDistance)
+    local MouseDistance = GetDistance(unit.pos, mousePos)
+    local GaleMouseSpotDirection = Vector((myHero.pos-MouseSpot):Normalized())
+    local GalemouseSpotDistance = GetDistance(myHero.pos, MouseSpot)
+    if GalemouseSpotDistance > 300 then
+        GalemouseSpotDistance = 300
+    end
+    local GaleMouseSpoty = myHero.pos - GaleMouseSpotDirection * GalemouseSpotDistance
+    MoveSpot = MouseSpot
+
+    if MoveSpot then
+        if GetDistance(myHero.pos, MoveSpot) < 50 or IsUnderEnemyTurret(MoveSpot) then
+            _G.SDK.Orbwalker.ForceMovement = nil
+        elseif self.Menu.misc.movementhelper:Value() and GetDistance(myHero.pos, unit.pos) <= AARange-50 and (Mode() == "Combo" or Mode() == "Harass") and self:CastingChecks() and MouseDistance < 750 then
+            _G.SDK.Orbwalker.ForceMovement = MoveSpot
+        else
+            _G.SDK.Orbwalker.ForceMovement = nil
+        end
+    end
+    return GaleMouseSpoty
+end
+
+function Xerath:AABlock()
+    if self.Menu.misc.blockaa:Value() then
+        if myHero.levelData.lvl >= self.Menu.misc.blockaalvl:Value() then
+            if Mode() == "Combo" then
+                _G.SDK.Orbwalker:SetAttack(false)
+            else
+                _G.SDK.Orbwalker:SetAttack(true)
+            end
+        end
+    end
+end
+
 function OnLoad()
     Manager()
 end
+
 
