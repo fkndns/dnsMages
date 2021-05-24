@@ -1374,7 +1374,6 @@ end
 function Lux:WComboAlly(enemy, ally)
     if ValidTarget(ally, W.range) and self:CanUse(_W, "Combo") and ally.health / ally.maxHealth <= self.Menu.combo.wcombohp:Value() / 100 and enemy.activeSpell.valid and not enemy.activeSpell.isStopped and self:SmoothChecks() and self.Menu.combo.wcomboally[ally.charName]:Value() then
         if enemy.activeSpell.target == ally.handle then
-            GGCast(HK_W, ally, W)
             dnsCast(HK_W, ally, W, 0.05)
         else
             local placementPos = enemy.activeSpell.placementPos
