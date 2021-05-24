@@ -1,7 +1,7 @@
 require "DamageLib"
 require "2DGeometry"
 require "MapPositionGOS"
-require "GGPrediction"
+require "PremiumPrediction"
 
 
 local EnemyHeroes = {}
